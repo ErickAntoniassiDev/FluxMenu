@@ -114,7 +114,7 @@ export const AdminPanel: React.FC = () => {
         <div>
           <h2 className="text-sm md:text-base font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
             <span className="p-1 px-1.5 rounded-md bg-slate-950 text-white font-mono text-[9px] uppercase font-black">Portal</span>
-            FluxMenu SaaS Dashboard
+            FluxMenu Dashboard
           </h2>
           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
             Configurações Administrativas do Cardápio, Preços e Lojas
@@ -444,7 +444,7 @@ export const AdminPanel: React.FC = () => {
         {activeTab === 'settings' && (
           <div className="bg-white rounded-xl border border-slate-200/70 p-5 space-y-6">
             <div>
-              <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">Identidade Corporativa e SaaS</h4>
+              <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">Identidade Corporativa e Estabelecimento</h4>
               <p className="text-[10px] text-slate-400 mt-0.5">Defina logos, descrições e detalhes comerciais expostos no cabeçalho do POS.</p>
             </div>
 
@@ -707,7 +707,7 @@ export const AdminPanel: React.FC = () => {
                   className="w-full h-11 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black uppercase transition shrink-0 cursor-pointer shadow-md"
                   id="add-prod-submit-form"
                 >
-                  Salvar Produto no SaaS
+                  Salvar Produto no FluxMenu
                 </button>
               </form>
             </div>

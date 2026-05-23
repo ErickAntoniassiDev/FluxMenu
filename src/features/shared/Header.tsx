@@ -64,28 +64,38 @@ export const Header: React.FC = () => {
 
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-slate-100 shadow-xs backdrop-blur-xl shrink-0">
-      <div className="mx-auto px-4 lg:px-8 h-18 flex items-center justify-between gap-4">
+      <div className="mx-auto px-4 lg:px-8 py-3 md:py-0 md:h-18 flex flex-col md:flex-row items-center justify-between gap-3 md:gap-4">
         
         {/* Logo and identity */}
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center text-white shadow-md shadow-slate-900/10 transition-transform hover:scale-105">
-            <Utensils className="w-5 h-5 text-red-550" />
-          </div>
-          <div className="hidden xs:block">
-            <div className="flex items-center gap-1.5">
-              <h1 className="font-display font-extrabold text-sm md:text-base tracking-tight select-none">
-                {restaurantConfig.name}
-              </h1>
-              <span className="px-1.5 py-0.5 rounded-md bg-red-650 text-[9px] uppercase font-bold text-white tracking-wide border border-red-700 shadow-xs">
-                Live POS
-              </span>
+        <div className="flex items-center justify-between w-full md:w-auto gap-3 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-slate-900 flex items-center justify-center text-white shadow-md shadow-slate-900/10 transition-transform hover:scale-105 shrink-0">
+              <Utensils className="w-4.5 h-4.5 text-red-550" />
             </div>
-            <p className="text-[9px] text-slate-400 font-mono">FluxMenu RBAC Architecture</p>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <h1 className="font-display font-extrabold text-xs md:text-sm tracking-tight select-none">
+                  {restaurantConfig.name}
+                </h1>
+                <span className="px-1 py-0.5 rounded-md bg-red-650 text-[8px] uppercase font-bold text-white tracking-wide border border-red-700 shadow-xs leading-none">
+                  Live POS
+                </span>
+              </div>
+              <p className="text-[8px] text-slate-400 font-mono">FluxMenu RBAC Architecture</p>
+            </div>
+          </div>
+
+          {/* Table select mobile short display */}
+          <div className="text-right sm:hidden select-none">
+            <span className="text-[7px] font-bold text-slate-400 uppercase block tracking-wider leading-none">MESA</span>
+            <span className="text-[10px] text-red-650 font-black uppercase tracking-tight block">
+              {tableNumber}
+            </span>
           </div>
         </div>
 
         {/* Dynamic Navigation Mode switcher restricted by Role Permissions */}
-        <div className="bg-slate-100 p-1 rounded-xl flex items-center relative gap-1 border border-slate-200/50 overflow-x-auto scrollbar-none">
+        <div className="bg-slate-100 p-0.5 rounded-xl flex items-center relative gap-0.5 border border-slate-200/50 overflow-x-auto w-full md:w-auto scrollbar-none">
           
           {isModeAllowed('client') && (
             <button
@@ -146,7 +156,7 @@ export const Header: React.FC = () => {
               id="nav-admin-btn"
             >
               <Sliders className="w-3.5 h-3.5" />
-              <span className="hidden leading-none md:inline">SaaS Admin</span>
+              <span className="hidden leading-none md:inline">FluxMenu Admin</span>
               <span className="md:hidden leading-none">Admin</span>
             </button>
           )}
@@ -170,7 +180,7 @@ export const Header: React.FC = () => {
         </div>
 
         {/* Real-time simulations controls & Auth/Role Dropdown Switcher */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center justify-between md:justify-end gap-3 w-full md:w-auto shrink-0 border-t border-slate-100/40 pt-2 md:pt-0 md:border-t-0">
           
           {/* Simulation order dispatcher (Only visible if allowed) */}
           {hasPermission('canSimulateOrders') && (
