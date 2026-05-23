@@ -6,6 +6,7 @@ export interface Product {
   category: 'entradas' | 'hamburgueres' | 'pizzas' | 'bebidas' | 'sobremesas';
   image: string;
   prepTimeMinutes: number; // estimated preparation time
+  available?: boolean;
 }
 
 export interface CartItem {
@@ -34,6 +35,18 @@ export interface Order {
   total: number;
   priority: 'baixa' | 'media' | 'alta' | 'urgente';
   notes?: string;
+  paymentStatus?: 'pendente' | 'pago';
+  paymentMethod?: 'pix' | 'credito' | 'debito' | 'dinheiro';
+}
+
+export interface PaymentLog {
+  id: string;
+  table: string;
+  amount: number;
+  paymentMethod: 'pix' | 'credito' | 'debito' | 'dinheiro';
+  timestamp: string;
+  itemsCount: number;
+  orders: string[]; // itemized order IDs
 }
 
 export interface Toast {
@@ -48,4 +61,26 @@ export interface RestaurantConfig {
   deliveryEstimate: string;
   address: string;
   instagram: string;
+  phone?: string;
+}
+
+export type UserRole = 'owner' | 'manager' | 'kitchen' | 'cashier' | 'waiter' | 'customer';
+
+export interface UserSession {
+  id: string;
+  name: string;
+  role: UserRole;
+  email: string;
+  avatar?: string;
+}
+
+export interface RolePermissionConfig {
+  allowedModes: ('client' | 'kitchen' | 'cashier' | 'admin' | 'split')[];
+  canEditProducts: boolean;
+  canConfigureRestaurant: boolean;
+  canManageTables: boolean;
+  canProcessCheckout: boolean;
+  canUpdateKDS: boolean;
+  canSimulateOrders: boolean;
+  canOrderForAnyTable: boolean;
 }
