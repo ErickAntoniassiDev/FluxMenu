@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Order, OrderStatus } from '../types';
-import { useApp } from '../store/AppContext';
+import { Order, OrderStatus } from '../../types';
+import { useApp } from '../../store/AppContext';
 import { ChevronRight, CheckCircle, Trash2, ShieldAlert, Clock, AlertOctagon } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -24,17 +24,17 @@ export const KitchenOrderCard: React.FC<KitchenOrderCardProps> = ({ order }) => 
   // Calculate elapsed waiting times dynamically tied to Tick context state
   const elapsedMs = Date.now() - new Date(order.createdAt).getTime();
   const elapsedMinutes = Math.floor(elapsedMs / 1000 / 60);
-  const elapsedSeconds = Math.floor((elapsedMs / 1000) % 60);
+  const elapsedSeconds = Math.floor((elapsedMs / 1000) % 65);
 
   // Consider an order delayed in peak periods if waiting more than 10 minutes and not yet delivered
   const isDelayed = order.status !== 'entregue' && elapsedMinutes >= 10;
 
-  // Visual style definitions
+  // Visual style definitions - Resto das cores tem que ser fortes
   const priorityStyles = {
-    urgente: 'bg-rose-500 text-white animate-pulse border-rose-600',
-    alta: 'bg-orange-100 text-orange-950 border-orange-200',
-    media: 'bg-slate-50 text-slate-800 border-slate-200/60',
-    baixa: 'bg-slate-100 text-slate-600 border-transparent'
+    urgente: 'bg-red-650 text-white font-extrabold animate-pulse border-red-750 shadow-md',
+    alta: 'bg-orange-600 text-white font-extrabold border-orange-700 shadow-sm',
+    media: 'bg-slate-800 text-white font-extrabold border-slate-700 shadow-xs',
+    baixa: 'bg-slate-600 text-white font-bold border-slate-550 shadow-xs'
   };
 
   // Column workflows
@@ -58,8 +58,8 @@ export const KitchenOrderCard: React.FC<KitchenOrderCardProps> = ({ order }) => 
       transition={{ type: 'spring', damping: 25, stiffness: 220 }}
       className={`bg-white rounded-2xl border p-4 shadow-2xs transition-all flex flex-col justify-between ${
         isDelayed
-          ? 'border-rose-400 shadow-rose-100 animate-urgent'
-          : 'border-slate-200/70 hover:border-slate-300'
+          ? 'border-red-500 shadow-red-100 animate-urgent'
+          : 'border-slate-200/70 hover:border-slate-350'
       }`}
       id={`order-kds-card-${order.id}`}
     >
@@ -67,7 +67,7 @@ export const KitchenOrderCard: React.FC<KitchenOrderCardProps> = ({ order }) => 
         {/* Table & Id Top Bar */}
         <div className="flex justify-between items-start gap-4 mb-3">
           <div>
-            <span className="text-[9px] uppercase font-bold text-slate-400 block leading-none">Mesa</span>
+            <span className="text-[9px] uppercase font-extrabold text-slate-400 block leading-none">Mesa</span>
             <span className="text-lg font-black text-slate-950 font-display transition-colors">
               {order.table}
             </span>
@@ -77,8 +77,8 @@ export const KitchenOrderCard: React.FC<KitchenOrderCardProps> = ({ order }) => 
             <span className="text-[9px] text-slate-400 font-mono block leading-none">{order.id}</span>
             <span className={`text-[10px] font-mono font-bold mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${
               isDelayed
-                ? 'bg-rose-100 text-rose-700 font-extrabold'
-                : 'bg-slate-100 text-slate-600'
+                ? 'bg-red-600 text-white font-extrabold'
+                : 'bg-slate-950 text-white font-bold'
             }`}>
               <Clock className="w-2.5 h-2.5" />
               {elapsedMinutes.toString().padStart(2, '0')}:{elapsedSeconds.toString().padStart(2, '0')}
@@ -89,7 +89,7 @@ export const KitchenOrderCard: React.FC<KitchenOrderCardProps> = ({ order }) => 
         {/* Priority categorization indicator */}
         <div className="flex items-center justify-between border-t border-b border-slate-100 py-1.5 my-2 gap-2">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Classificação:</span>
-          <span className={`text-[9px] tracking-widest uppercase px-1.5 py-0.5 rounded-sm font-black border ${priorityStyles[order.priority]}`}>
+          <span className={`text-[9px] tracking-wider uppercase px-2 py-0.5 rounded-md font-extrabold border ${priorityStyles[order.priority]}`}>
             {order.priority}
           </span>
         </div>
@@ -109,16 +109,16 @@ export const KitchenOrderCard: React.FC<KitchenOrderCardProps> = ({ order }) => 
                 onClick={() => handleToggleCheck(index)}
                 className={`flex gap-3 text-xs p-2 rounded-lg cursor-pointer transition select-none ${
                   isChecked 
-                    ? 'bg-slate-50/50 opacity-45' 
-                    : 'bg-white hover:bg-slate-50/50'
+                    ? 'bg-slate-100 opacity-45' 
+                    : 'bg-white hover:bg-slate-100'
                 }`}
                 id={`kds-card-${order.id}-item-${index}`}
               >
-                {/* Quantity and check bubble */}
+                {/* Quantity and check bubble - Cores Fortes */}
                 <span className={`w-6 h-6 rounded-md font-mono text-[11px] font-black shrink-0 flex items-center justify-center transition-all ${
                   isChecked 
-                    ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' 
-                    : 'bg-rose-50 text-rose-600 font-black'
+                    ? 'bg-emerald-600 text-white border border-emerald-700 shadow-xs animate-scale-in' 
+                    : 'bg-red-600 text-white font-extrabold shadow-sm'
                 }`}>
                   {isChecked ? '✓' : `${item.quantity}x`}
                 </span>
@@ -132,10 +132,10 @@ export const KitchenOrderCard: React.FC<KitchenOrderCardProps> = ({ order }) => 
                   {item.observation && (
                     <span className={`text-[10px] block mt-1 p-1 rounded font-semibold ${
                       hasAllergyWarning
-                        ? 'bg-rose-50 text-rose-700 border border-rose-100/60 animate-pulse font-extrabold flex items-center gap-1 shrink-0'
-                        : 'bg-slate-50 text-slate-500'
+                        ? 'bg-red-650 text-white border border-red-700 animate-pulse font-extrabold flex items-center gap-1 shrink-0'
+                        : 'bg-slate-100 text-slate-600 font-bold'
                     }`}>
-                      {hasAllergyWarning && <ShieldAlert className="w-3 h-3 text-rose-600 shrink-0" />}
+                      {hasAllergyWarning && <ShieldAlert className="w-3 h-3 text-white shrink-0" />}
                       💡 {item.observation}
                     </span>
                   )}
@@ -147,21 +147,21 @@ export const KitchenOrderCard: React.FC<KitchenOrderCardProps> = ({ order }) => 
 
         {/* Global summary notes */}
         {order.notes && (
-          <div className="mt-3 p-2 rounded-lg bg-rose-50/40 text-[9px] font-bold text-rose-800 border border-rose-100/50 flex gap-1 items-start">
-            <AlertOctagon className="w-3 h-3 text-rose-600 shrink-0 mt-0.5" />
+          <div className="mt-3 p-2 rounded-lg bg-red-650 text-white font-extrabold text-[9px] border border-red-700 flex gap-1 items-start shadow-sm">
+            <AlertOctagon className="w-3 h-3 text-white shrink-0 mt-0.5" />
             <div>{order.notes}</div>
           </div>
         )}
       </div>
 
       {/* Button controls */}
-      <div className="mt-4 pt-3 border-t border-slate-100/80 flex items-center justify-between gap-2 shrink-0">
+      <div className="mt-4 pt-3 border-t border-slate-150 flex items-center justify-between gap-2 shrink-0">
         
         {/* Archive / Dismiss button */}
         {order.status === 'entregue' ? (
           <button
             onClick={handleArchivedSubmit}
-            className="text-[10px] font-extrabold text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg py-1.5 px-2.5 transition flex items-center gap-1 cursor-pointer shrink-0 uppercase"
+            className="text-[10px] font-extrabold text-slate-600 hover:text-slate-950 hover:bg-slate-100 rounded-lg py-1.5 px-2.5 transition flex items-center gap-1 cursor-pointer shrink-0 uppercase"
             title="Arquivar pedido entregue"
             id={`btn-archive-${order.id}`}
           >
@@ -171,7 +171,7 @@ export const KitchenOrderCard: React.FC<KitchenOrderCardProps> = ({ order }) => 
         ) : (
           <button
             onClick={handleArchivedSubmit}
-            className="text-[10px] font-semibold text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg py-1.5 px-2.5 transition cursor-pointer uppercase shrink-0"
+            className="text-[10px] font-extrabold text-slate-500 hover:text-red-700 hover:bg-red-50 rounded-lg py-1.5 px-2.5 transition cursor-pointer uppercase shrink-0"
             title="Cancelar o pedido"
             id={`btn-cancel-${order.id}`}
           >
@@ -183,9 +183,9 @@ export const KitchenOrderCard: React.FC<KitchenOrderCardProps> = ({ order }) => 
         {order.status !== 'entregue' && (
           <button
             onClick={handleAdvance}
-            className={`py-1.5 px-3.5 rounded-xl text-[10px] font-black text-white flex items-center gap-1 transition-all select-none cursor-pointer shadow-3xs ${
+            className={`py-1.5 px-3.5 rounded-xl text-[10px] font-black text-white flex items-center gap-1 transition-all select-none cursor-pointer shadow-sm ${
               order.status === 'novo'
-                ? 'bg-slate-900 hover:bg-slate-800'
+                ? 'bg-slate-950 hover:bg-slate-855'
                 : order.status === 'preparo'
                 ? 'bg-amber-600 hover:bg-amber-500'
                 : 'bg-emerald-600 hover:bg-emerald-500'
@@ -195,7 +195,7 @@ export const KitchenOrderCard: React.FC<KitchenOrderCardProps> = ({ order }) => 
             <span>
               {order.status === 'novo' ? 'Começar Preparo' : order.status === 'preparo' ? 'Pronto!' : 'Entregar'}
             </span>
-            <ChevronRight className="w-3.5 h-3.5 text-rose-400" />
+            <ChevronRight className="w-3.5 h-3.5 text-white" />
           </button>
         )}
       </div>

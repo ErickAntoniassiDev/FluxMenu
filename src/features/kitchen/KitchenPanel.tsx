@@ -1,14 +1,13 @@
 import React, { useState, useMemo } from 'react';
-import { useApp } from '../store/AppContext';
+import { useApp } from '../../store/AppContext';
 import { KitchenOrderCard } from './KitchenOrderCard';
-import { ChefHat, Search, Filter, ShieldAlert, Sparkles, RefreshCcw, Trash2, CheckSquare } from 'lucide-react';
+import { ChefHat, Search, RefreshCcw, Trash2 } from 'lucide-react';
 
 export const KitchenPanel: React.FC = () => {
   const {
     orders,
     clearAllOrders,
     resetMockOrders,
-    triggerSimulatedOrder,
     tick
   } = useApp();
 
@@ -62,9 +61,9 @@ export const KitchenPanel: React.FC = () => {
     <div className="flex flex-col h-full bg-slate-900 text-slate-100" id="kitchen-panel-container">
       
       {/* Metrics Counter bar with custom widgets */}
-      <div className="bg-slate-950 p-4 md:p-6 border-b border-slate-800/80 flex flex-wrap gap-4 items-center justify-between shrink-0">
+      <div className="bg-slate-950 p-4 md:p-6 border-b border-slate-800/85 flex flex-wrap gap-4 items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+          <div className="w-10 h-10 rounded-xl bg-red-600/10 border border-red-500/30 flex items-center justify-center text-red-500">
             <ChefHat className="w-5 h-5" />
           </div>
           <div>
@@ -77,34 +76,34 @@ export const KitchenPanel: React.FC = () => {
           </div>
         </div>
 
-        {/* Real-time counters widgets */}
+        {/* Real-time counters widgets - Cores Fortes */}
         <div className="flex gap-2.5 overflow-x-auto py-1">
-          <div className="px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 shrink-0 text-center select-none">
+          <div className="px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 shrink-0 text-center select-none min-w-[70px]">
             <span className="text-[9px] uppercase font-bold text-slate-500 block">Novos</span>
             <span className="text-base font-black font-mono text-white block">{stats.novo}</span>
           </div>
 
-          <div className="px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 shrink-0 text-center select-none">
+          <div className="px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 shrink-0 text-center select-none min-w-[70px]">
             <span className="text-[9px] uppercase font-bold text-slate-500 block">Preparo</span>
             <span className="text-base font-black font-mono text-amber-500 block">{stats.preparo}</span>
           </div>
 
-          <div className="px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 shrink-0 text-center select-none">
+          <div className="px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 shrink-0 text-center select-none min-w-[70px]">
             <span className="text-[9px] uppercase font-bold text-slate-500 block">Prontos</span>
             <span className="text-base font-black font-mono text-emerald-500 block">{stats.pronto}</span>
           </div>
 
           {stats.delayed > 0 && (
-            <div className="px-3.5 py-1.5 rounded-xl bg-rose-950/40 border border-rose-900/50 shrink-0 text-center select-none animate-pulse">
-              <span className="text-[9px] uppercase font-extrabold text-rose-400 block">Atrasados</span>
-              <span className="text-base font-black font-mono text-rose-500 block">{stats.delayed}</span>
+            <div className="px-3.5 py-1.5 rounded-xl bg-red-950/50 border border-red-900 shrink-0 text-center select-none animate-pulse min-w-[70px]">
+              <span className="text-[9px] uppercase font-extrabold text-red-400 block">Atrasados</span>
+              <span className="text-base font-black font-mono text-red-500 block">{stats.delayed}</span>
             </div>
           )}
         </div>
       </div>
 
       {/* Filter and settings actions bar */}
-      <div className="bg-slate-950/60 p-4 border-b border-slate-800/50 flex flex-wrap gap-3 items-center justify-between shrink-0">
+      <div className="bg-slate-950/80 p-4 border-b border-slate-800/50 flex flex-wrap gap-3 items-center justify-between shrink-0">
         
         {/* Left searching and filters */}
         <div className="flex flex-wrap items-center gap-2.5">
@@ -115,16 +114,16 @@ export const KitchenPanel: React.FC = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Filtro Mesa / ID..."
-              className="w-full pl-9 pr-4 py-2 bg-slate-900 rounded-xl border border-slate-800 focus:border-rose-500 focus:bg-slate-900/90 text-xs text-slate-200 outline-hidden tracking-tight transition placeholder-slate-500"
+              className="w-full pl-9 pr-4 py-2 bg-slate-900 rounded-xl border border-slate-800 focus:border-red-650 focus:bg-slate-900/90 text-xs text-slate-200 outline-hidden tracking-tight transition placeholder-slate-500"
               id="kds-search-input"
             />
           </div>
 
-          {/* Quick classification toggle */}
+          {/* Quick classification toggle - Cores Fortes */}
           <select
             value={priorityFilter}
             onChange={(e) => setPriorityFilter(e.target.value)}
-            className="text-xs text-slate-300 font-bold bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 outline-hidden focus:border-rose-500 cursor-pointer"
+            className="text-xs text-slate-300 font-extrabold bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 outline-hidden focus:border-red-600 cursor-pointer"
             id="kds-priority-select-filter"
           >
             <option value="todos">Todas Prioridades</option>
@@ -148,7 +147,7 @@ export const KitchenPanel: React.FC = () => {
 
           <button
             onClick={clearAllOrders}
-            className="px-3 py-2 text-xs border border-rose-900/20 bg-rose-950/20 text-rose-400 hover:bg-rose-900 hover:text-white rounded-lg transition cursor-pointer flex items-center gap-1.5 font-bold"
+            className="px-3 py-2 text-xs border border-red-900 bg-red-955/30 text-red-500 hover:bg-red-900 hover:text-white rounded-lg transition cursor-pointer flex items-center gap-1.5 font-bold"
             title="Limpar permanentemente todos os pedidos ativos"
             id="kds-btn-clear-all"
           >
@@ -162,11 +161,11 @@ export const KitchenPanel: React.FC = () => {
       <div className="flex-1 overflow-x-auto p-4 md:p-6">
         <div className="min-w-[900px] h-full grid grid-cols-3 gap-6">
           
-          {/* Column 1: NOVOS */}
-          <div className="flex flex-col h-full bg-slate-950/40 rounded-2xl border border-slate-800/80 p-4" id="kds-lane-new">
+          {/* Column 1: NOVOS - Fundo Azul Usar Preto */}
+          <div className="flex flex-col h-full bg-black/60 rounded-2xl border border-slate-800 p-4 shadow-inner" id="kds-lane-new">
             <div className="flex justify-between items-center pb-3 border-b border-slate-800 shrink-0 mb-4 select-none">
               <span className="text-xs font-black uppercase text-slate-300 tracking-wide flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-indigo-500 block"></span>
+                <span className="w-2.5 h-2.5 rounded-full bg-slate-950 border border-slate-700 block shrink-0 inline-block"></span>
                 Novos Pedidos ({columnNew.length})
               </span>
             </div>
@@ -186,11 +185,11 @@ export const KitchenPanel: React.FC = () => {
             </div>
           </div>
 
-          {/* Column 2: PREPARO */}
-          <div className="flex flex-col h-full bg-slate-950/40 rounded-2xl border border-slate-800/80 p-4" id="kds-lane-prep">
+          {/* Column 2: PREPARO - Cores fortes */}
+          <div className="flex flex-col h-full bg-slate-950/45 rounded-2xl border border-slate-800 p-4" id="kds-lane-prep">
             <div className="flex justify-between items-center pb-3 border-b border-slate-800 shrink-0 mb-4 select-none">
               <span className="text-xs font-black uppercase text-slate-300 tracking-wide flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-amber-500 block"></span>
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 block shrink-0 inline-block shadow-sm"></span>
                 Em Preparo ({columnPrep.length})
               </span>
             </div>
@@ -210,11 +209,11 @@ export const KitchenPanel: React.FC = () => {
             </div>
           </div>
 
-          {/* Column 3: READY / DELIVERED */}
-          <div className="flex flex-col h-full bg-slate-950/40 rounded-2xl border border-slate-800/80 p-4" id="kds-lane-ready">
+          {/* Column 3: READY / DELIVERED - Cores fortes */}
+          <div className="flex flex-col h-full bg-slate-950/45 rounded-2xl border border-slate-800 p-4" id="kds-lane-ready">
             <div className="flex justify-between items-center pb-3 border-b border-slate-800 shrink-0 mb-4 select-none">
               <span className="text-xs font-black uppercase text-slate-300 tracking-wide flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 block"></span>
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 block shrink-0 inline-block shadow-sm animate-pulse-fast"></span>
                 Prontos &amp; Entregues ({columnReady.length})
               </span>
             </div>

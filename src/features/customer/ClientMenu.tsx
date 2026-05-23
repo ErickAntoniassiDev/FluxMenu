@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { useApp } from '../store/AppContext';
-import { Product } from '../types';
+import { useApp } from '../../store/AppContext';
+import { Product } from '../../types';
 import { ShoppingCart, Search, Utensils, Info, HelpCircle } from 'lucide-react';
 import { ProductModal } from './ProductModal';
 import { CartSidebar } from './CartSidebar';
@@ -39,30 +39,40 @@ export const ClientMenu: React.FC = () => {
   const cartTotalVal = cart.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
 
   return (
-    <div className="flex flex-col h-full bg-slate-50/50" id="client-menu-container">
+    <div className="flex flex-col h-full bg-slate-50/50 animate-fade-in relative" id="client-menu-container">
       {/* Search and Header filters overlay bar */}
       <div className="bg-white p-4 md:p-6 border-b border-slate-100 flex flex-col md:flex-row gap-4 items-center justify-between shrink-0">
         <div>
           <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-tight flex items-center gap-2">
-            <span className="w-1.5 h-3.5 bg-rose-500 rounded-xs inline-block"></span>
+            <span className="w-1.5 h-3.5 bg-red-600 rounded-xs inline-block"></span>
             Cardápio Interativo ({tableNumber})
           </h2>
-          <p className="text-[10px] text-slate-400 font-semibold uppercase mt-0.5 tracking-wider">
+          <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5 tracking-wider">
             Selecione seus itens e envie para a cozinha em tempo real!
           </p>
         </div>
 
-        {/* Input box */}
-        <div className="relative w-full md:max-w-xs shrink-0">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Pesquisar pratos, bebidas..."
-            className="w-full pl-9 pr-4 py-2 bg-slate-50 rounded-xl border border-slate-200 focus:border-rose-500 focus:bg-white text-xs text-slate-800 outline-hidden tracking-tight transition"
-            id="client-search-input"
-          />
+        {/* Input box and Portal Link */}
+        <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end shrink-0">
+          <div className="relative flex-1 md:w-64 shrink-0">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Pesquisar pratos, bebidas..."
+              className="w-full pl-9 pr-4 py-2 bg-slate-50 rounded-xl border border-slate-200 focus:border-red-650 focus:bg-white text-xs text-slate-800 outline-hidden tracking-tight transition"
+              id="client-search-input"
+            />
+          </div>
+
+          <a
+            href="#/portal"
+            className="px-3 py-2 rounded-xl text-[10px] uppercase font-black tracking-wider text-red-650 border border-red-100 bg-red-50/30 hover:bg-red-50 hover:text-red-750 transition flex items-center gap-1.5 cursor-pointer select-none"
+            title="Clique para acessar o Portal Administrativo com simulação de papéis (RBAC), KDS de Cozinha e Caixa"
+          >
+            <span>🔐 Portal</span>
+          </a>
         </div>
       </div>
 
@@ -72,10 +82,10 @@ export const ClientMenu: React.FC = () => {
           <button
             key={cat.id}
             onClick={() => setSelectedCategory(cat.id)}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition cursor-pointer select-none border ${
+            className={`px-3.5 py-1.5 rounded-full text-xs font-black whitespace-nowrap transition cursor-pointer select-none border ${
               selectedCategory === cat.id
-                ? 'bg-rose-500 text-white border-rose-500 shadow-xs'
-                : 'bg-slate-50 text-slate-500 hover:text-slate-800 hover:bg-slate-100 border-transparent'
+                ? 'bg-red-600 text-white border-red-700 shadow-sm'
+                : 'bg-slate-55 text-slate-500 hover:text-slate-800 hover:bg-slate-100 border-transparent'
             }`}
             id={`category-tab-${cat.id}`}
           >
@@ -103,8 +113,8 @@ export const ClientMenu: React.FC = () => {
                   onClick={() => isAvailable && setSelectedProduct(product)}
                   className={`group relative bg-white border rounded-2xl overflow-hidden shadow-2xs hover:shadow-xs transition-all flex flex-col ${
                     isAvailable 
-                      ? 'cursor-pointer border-slate-200/60 hover:border-rose-200' 
-                      : 'border-slate-100 filter grayscale opacity-60 pointer-events-none'
+                      ? 'cursor-pointer border-slate-200/60 hover:border-red-300' 
+                      : 'border-slate-105 filter grayscale opacity-60 pointer-events-none'
                   }`}
                   id={`product-card-${product.id}`}
                 >
@@ -122,15 +132,15 @@ export const ClientMenu: React.FC = () => {
                       ⏱️ {product.prepTimeMinutes} min
                     </div>
 
-                    {/* Category tag */}
-                    <div className="absolute bottom-2.5 left-2.5 px-1.5 py-0.5 bg-black/50 backdrop-blur-xs rounded-sm text-[8px] font-extrabold text-rose-300 uppercase tracking-widest">
+                    {/* Category tag - Vermelho no Rosa */}
+                    <div className="absolute bottom-2.5 left-2.5 px-1.5 py-0.5 bg-black/60 backdrop-blur-xs rounded-sm text-[8px] font-extrabold text-red-500 uppercase tracking-widest border border-slate-800">
                       {product.category}
                     </div>
 
                     {/* Sold out alert overlay */}
                     {!isAvailable && (
                       <div className="absolute inset-0 bg-slate-950/70 border border-slate-900 backdrop-blur-xs flex items-center justify-center">
-                        <span className="px-3 py-1.5 rounded bg-rose-500/90 text-white text-[10px] uppercase font-black tracking-widest animate-pulse border border-rose-400">
+                        <span className="px-3 py-1.5 rounded bg-red-600/90 text-white text-[10px] uppercase font-black tracking-widest animate-pulse border border-red-500">
                           Esgotado!
                         </span>
                       </div>
@@ -143,7 +153,7 @@ export const ClientMenu: React.FC = () => {
                       <h4 className="text-xs font-black text-slate-900 leading-snug tracking-tight mb-1">
                         {product.name}
                       </h4>
-                      <p className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed mb-4">
+                      <p className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed mb-4 font-semibold">
                         {product.description}
                       </p>
                     </div>
@@ -154,7 +164,7 @@ export const ClientMenu: React.FC = () => {
                       </span>
                       
                       {isAvailable ? (
-                        <button className="px-2.5 py-1.5 rounded-lg bg-rose-50 text-rose-500 font-extrabold text-[10px] group-hover:bg-rose-500 group-hover:text-white transition cursor-pointer select-none border border-rose-100">
+                        <button className="px-2.5 py-1.5 rounded-lg bg-red-50 text-red-650 font-black text-[10px] group-hover:bg-red-600 group-hover:text-white transition cursor-pointer select-none border border-red-100">
                           + Adicionar
                         </button>
                       ) : (
@@ -169,34 +179,34 @@ export const ClientMenu: React.FC = () => {
         )}
       </div>
 
-      {/* Floating Bottom Basket Checkout triggering bar (If items exist in cart) */}
+      {/* Floating Bottom Basket Checkout triggering bar (If items exist in cart) - Vermelho no Rosa */}
       <AnimatePresence>
         {cartItemCount > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 40 }}
-            className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 z-40 max-w-sm w-full"
+            className="absolute bottom-4 left-4 right-4 md:left-auto md:right-4 z-40 max-w-[calc(100%-2rem)] md:max-w-sm"
             id="floating-cart-bar"
           >
             <button
               onClick={() => setIsCartOpen(true)}
-              className="w-full bg-rose-500 hover:bg-rose-400 text-white rounded-xl py-3.5 px-4 flex items-center justify-between shadow-lg hover:shadow-xl transition active:scale-98 cursor-pointer border border-rose-400 hover:border-rose-300"
+              className="w-full bg-red-650 hover:bg-red-700 text-white rounded-xl py-3.5 px-4 flex items-center justify-between shadow-lg hover:shadow-xl transition active:scale-98 cursor-pointer border border-red-750"
             >
               <div className="flex items-center gap-2.5">
-                <span className="relative p-1.5 rounded-lg bg-rose-600">
+                <span className="relative p-1.5 rounded-lg bg-red-750">
                   <ShoppingCart className="w-4 h-4" />
-                  <span className="absolute -top-1.5 -right-1.5 bg-white text-rose-600 text-[9px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center shadow-xs">
+                  <span className="absolute -top-1.5 -right-1.5 bg-white text-red-650 text-[9px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center shadow-xs">
                     {cartItemCount}
                   </span>
                 </span>
                 <div className="text-left leading-none">
-                  <span className="text-[10px] font-black uppercase tracking-wider block">Ver Carrinho</span>
-                  <span className="text-[9px] text-rose-100 mt-0.5 block">{tableNumber} • Mesa selecionada</span>
+                  <span className="text-[10px] font-black uppercase tracking-wider block font-black">Ver Carrinho</span>
+                  <span className="text-[9px] text-red-100 mt-0.5 block font-semibold">{tableNumber} • Mesa selecionada</span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5 font-mono text-xs font-black bg-rose-600/50 px-3 py-1.5 rounded-lg">
+              <div className="flex items-center gap-1.5 font-mono text-xs font-black bg-red-750/50 px-3 py-1.5 rounded-lg">
                 <span>Total:</span>
                 <span>{cartTotalVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
               </div>

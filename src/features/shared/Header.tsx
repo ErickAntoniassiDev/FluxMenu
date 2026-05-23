@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useApp } from '../store/AppContext';
+import { useApp } from '../../store/AppContext';
 import { 
   Utensils, 
   Smartphone, 
@@ -12,9 +12,8 @@ import {
   ChevronDown, 
   User, 
   UserCheck,
-  SmartphoneNfc
 } from 'lucide-react';
-import { MOCK_USERS } from '../utils/rbac';
+import { MOCK_USERS } from '../../utils/rbac';
 
 const ROLE_LABEL_PT: Record<string, string> = {
   owner: 'Dono (Owner)',
@@ -26,12 +25,12 @@ const ROLE_LABEL_PT: Record<string, string> = {
 };
 
 const ROLE_COLOR_CLASSES: Record<string, string> = {
-  owner: 'bg-rose-50 text-rose-600 border border-rose-100',
-  manager: 'bg-purple-50 text-purple-600 border border-purple-100',
-  kitchen: 'bg-amber-50 text-amber-600 border border-amber-100',
-  cashier: 'bg-emerald-50 text-emerald-600 border border-emerald-100',
-  waiter: 'bg-blue-50 text-blue-600 border border-blue-100',
-  customer: 'bg-slate-100 text-slate-600 border border-slate-200',
+  owner: 'bg-red-600 text-white font-extrabold border border-red-700 px-2 py-0.5 shadow-sm', // vermelho no rosa, forte
+  manager: 'bg-purple-700 text-white font-extrabold border border-purple-850 px-2 py-0.5 shadow-sm', // forte
+  kitchen: 'bg-amber-600 text-white font-extrabold border border-amber-700 px-2 py-0.5 shadow-sm', // forte e vibrante
+  cashier: 'bg-emerald-600 text-white font-extrabold border border-emerald-700 px-2 py-0.5 shadow-sm', // forte e vibrante
+  waiter: 'bg-slate-950 text-white font-extrabold border border-slate-900 px-2 py-0.5 shadow-sm', // fundo azul usar preto, forte
+  customer: 'bg-slate-800 text-white font-extrabold border border-slate-705 px-2 py-0.5 shadow-sm', // forte e vibrante
 };
 
 export const Header: React.FC = () => {
@@ -70,14 +69,14 @@ export const Header: React.FC = () => {
         {/* Logo and identity */}
         <div className="flex items-center gap-3 shrink-0">
           <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center text-white shadow-md shadow-slate-900/10 transition-transform hover:scale-105">
-            <Utensils className="w-5 h-5 text-rose-400" />
+            <Utensils className="w-5 h-5 text-red-550" />
           </div>
           <div className="hidden xs:block">
             <div className="flex items-center gap-1.5">
               <h1 className="font-display font-extrabold text-sm md:text-base tracking-tight select-none">
                 {restaurantConfig.name}
               </h1>
-              <span className="px-1.5 py-0.5 rounded-md bg-rose-50 text-[9px] uppercase font-bold text-rose-500 tracking-wide border border-rose-100/60">
+              <span className="px-1.5 py-0.5 rounded-md bg-red-650 text-[9px] uppercase font-bold text-white tracking-wide border border-red-700 shadow-xs">
                 Live POS
               </span>
             </div>
@@ -93,12 +92,12 @@ export const Header: React.FC = () => {
               onClick={() => setActiveMode('client')}
               className={`px-2.5 py-1.5 md:px-3.5 md:py-2 rounded-lg text-[10px] md:text-xs font-bold tracking-wide transition-all duration-200 flex items-center gap-1.5 shrink-0 ${
                 activeMode === 'client' 
-                  ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-200/40' 
+                  ? 'bg-slate-950 text-white shadow-xs' 
                   : 'text-slate-500 hover:text-slate-800'
               }`}
               id="nav-client-btn"
             >
-              <Smartphone className="w-3.5 h-3.5 text-slate-600" />
+              <Smartphone className="w-3.5 h-3.5" />
               <span className="hidden leading-none md:inline">Autoatendimento</span>
               <span className="md:hidden leading-none">Menu</span>
             </button>
@@ -109,12 +108,12 @@ export const Header: React.FC = () => {
               onClick={() => setActiveMode('kitchen')}
               className={`px-2.5 py-1.5 md:px-3.5 md:py-2 rounded-lg text-[10px] md:text-xs font-bold tracking-wide transition-all duration-200 flex items-center gap-1.5 shrink-0 ${
                 activeMode === 'kitchen' 
-                  ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-200/40' 
+                  ? 'bg-slate-950 text-white shadow-xs' 
                   : 'text-slate-500 hover:text-slate-800'
               }`}
               id="nav-kitchen-btn"
             >
-              <ChefHat className="w-3.5 h-3.5 text-slate-600" />
+              <ChefHat className="w-3.5 h-3.5" />
               <span className="hidden leading-none md:inline">Painel Cozinha (KDS)</span>
               <span className="md:hidden leading-none">Cozinha</span>
             </button>
@@ -125,12 +124,12 @@ export const Header: React.FC = () => {
               onClick={() => setActiveMode('cashier')}
               className={`px-2.5 py-1.5 md:px-3.5 md:py-2 rounded-lg text-[10px] md:text-xs font-bold tracking-wide transition-all duration-200 flex items-center gap-1.5 shrink-0 ${
                 activeMode === 'cashier' 
-                  ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-200/40' 
+                  ? 'bg-slate-950 text-white shadow-xs' 
                   : 'text-slate-500 hover:text-slate-800'
               }`}
               id="nav-cashier-btn"
             >
-              <Receipt className="w-3.5 h-3.5 text-slate-600" />
+              <Receipt className="w-3.5 h-3.5" />
               <span className="hidden leading-none md:inline">Painel Caixa</span>
               <span className="md:hidden leading-none">Caixa</span>
             </button>
@@ -141,12 +140,12 @@ export const Header: React.FC = () => {
               onClick={() => setActiveMode('admin')}
               className={`px-2.5 py-1.5 md:px-3.5 md:py-2 rounded-lg text-[10px] md:text-xs font-bold tracking-wide transition-all duration-200 flex items-center gap-1.5 shrink-0 ${
                 activeMode === 'admin' 
-                  ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-200/40' 
+                  ? 'bg-slate-950 text-white shadow-xs' 
                   : 'text-slate-500 hover:text-slate-800'
               }`}
               id="nav-admin-btn"
             >
-              <Sliders className="w-3.5 h-3.5 text-slate-600" />
+              <Sliders className="w-3.5 h-3.5" />
               <span className="hidden leading-none md:inline">SaaS Admin</span>
               <span className="md:hidden leading-none">Admin</span>
             </button>
@@ -157,12 +156,12 @@ export const Header: React.FC = () => {
               onClick={() => setActiveMode('split')}
               className={`px-2.5 py-1.5 md:px-3.5 md:py-2 rounded-lg text-[10px] md:text-xs font-bold tracking-wide transition-all duration-200 flex items-center gap-1.5 shrink-0 ${
                 activeMode === 'split' 
-                  ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-200/40' 
+                  ? 'bg-slate-950 text-white shadow-xs' 
                   : 'text-slate-500 hover:text-slate-800'
               }`}
               id="nav-split-btn"
             >
-              <Layers className="w-3.5 h-3.5 text-slate-600" />
+              <Layers className="w-3.5 h-3.5" />
               <span className="hidden leading-none md:inline">Simultâneo</span>
               <span className="md:hidden leading-none">Dual</span>
             </button>
@@ -177,7 +176,7 @@ export const Header: React.FC = () => {
           {hasPermission('canSimulateOrders') && (
             <button
               onClick={triggerSimulatedOrder}
-              className="px-2 py-1.5 bg-slate-950 text-white rounded-lg text-[10px] md:text-xs font-bold hover:bg-slate-800 hover:text-rose-400 transition-all duration-200 active:scale-95 flex items-center gap-1 shrink-0 shadow-sm shadow-slate-950/10 cursor-pointer"
+              className="px-2 py-1.5 bg-red-600 text-white rounded-lg text-[10px] md:text-xs font-bold hover:bg-red-700 transition-all duration-200 active:scale-95 flex items-center gap-1 shrink-0 shadow-sm cursor-pointer"
               title="Disparar novo pedido fictício aleatório nas mesas para testar o fluxo de KDS/Caixa"
               id="simulate-order-btn"
             >
@@ -195,7 +194,7 @@ export const Header: React.FC = () => {
               <select
                 value={tableNumber}
                 onChange={(e) => setTableNumber(e.target.value)}
-                className="text-xs text-slate-900 font-extrabold bg-transparent border-0 p-0 text-right uppercase tracking-tight focus:ring-0 cursor-pointer hover:text-rose-500 hover:underline"
+                className="text-xs text-slate-900 font-extrabold bg-transparent border-0 p-0 text-right uppercase tracking-tight focus:ring-0 cursor-pointer hover:text-red-600 hover:underline"
                 id="header-table-select"
               >
                 {tables.map(tab => (
@@ -203,7 +202,7 @@ export const Header: React.FC = () => {
                 ))}
               </select>
             ) : (
-              <span className="text-xs text-rose-500 font-black uppercase tracking-tight block">
+              <span className="text-xs text-red-600 font-black uppercase tracking-tight block">
                 {tableNumber}
               </span>
             )}
@@ -215,7 +214,7 @@ export const Header: React.FC = () => {
           <div className="relative" ref={dropdownRef} id="auth-simulator-container">
             <button
               onClick={() => setShowUserDropdown(!showUserDropdown)}
-              className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-all duration-200 text-left cursor-pointer hover:border-slate-200 max-w-[120px] md:max-w-[200px]"
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl border border-slate-150 bg-slate-105 hover:bg-slate-100 transition-all duration-200 text-left cursor-pointer hover:border-slate-350 max-w-[120px] md:max-w-[200px]"
               title="Simulador de Sessões e Permissões (RBAC)"
               id="auth-profile-dropdown-btn"
             >
@@ -269,8 +268,8 @@ export const Header: React.FC = () => {
                         }}
                         className={`w-full p-2.5 flex items-center gap-3 text-left transition ${
                           isSelected 
-                            ? 'bg-rose-50/30 hover:bg-rose-50/40' 
-                            : 'hover:bg-slate-50'
+                            ? 'bg-red-50/50 hover:bg-red-100/30' 
+                            : 'hover:bg-slate-55'
                         }`}
                       >
                         {user.avatar ? (
@@ -289,7 +288,7 @@ export const Header: React.FC = () => {
                           <div className="flex items-center justify-between gap-1">
                             <p className="text-xs font-bold text-slate-800 truncate">{user.name}</p>
                             {isSelected && (
-                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                              <span className="w-1.5 h-1.5 rounded-full bg-red-600"></span>
                             )}
                           </div>
                           <p className="text-[10px] text-slate-400 truncate">{user.email}</p>
@@ -308,7 +307,7 @@ export const Header: React.FC = () => {
 
                 {/* Dropdown Footer */}
                 <div className="p-3 bg-slate-50 text-center border-t border-slate-100">
-                  <p className="text-[9px] text-slate-400 font-medium">As restrições de navegação e as travas de gravação mudam instantaneamente.</p>
+                  <p className="text-[9px] text-slate-400 font-medium">As restrições de acesso e as travas de gravação mudam instantaneamente.</p>
                 </div>
 
               </div>

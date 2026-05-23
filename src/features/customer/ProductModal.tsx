@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Product } from '../types';
-import { useApp } from '../store/AppContext';
+import { Product } from '../../types';
+import { useApp } from '../../store/AppContext';
 import { X, Plus, Minus, Info, AlertTriangle } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -55,7 +55,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, onClose }) 
           {/* Header Close button */}
           <button
             onClick={onClose}
-            className="absolute right-4 top-4 z-10 w-8 h-8 rounded-full bg-slate-900/40 hover:bg-slate-900/60 text-white flex items-center justify-center backdrop-blur-xs transition-colors"
+            className="absolute right-4 top-4 z-10 w-8 h-8 rounded-full bg-slate-900/40 hover:bg-slate-900/60 text-white flex items-center justify-center backdrop-blur-xs transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -70,7 +70,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, onClose }) 
             />
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent" />
             <div className="absolute bottom-4 left-4 right-4 text-white">
-              <span className="px-2 py-0.5 rounded-sm bg-rose-500 text-[9px] font-extrabold uppercase tracking-widest leading-none block w-max mb-1.5 shadow-sm">
+              <span className="px-2 py-0.5 rounded-sm bg-red-650 text-[9px] font-extrabold uppercase tracking-widest leading-none block w-max mb-1.5 shadow-sm border border-red-750">
                 {product.category}
               </span>
               <h3 className="text-xl font-display font-extrabold leading-none tracking-tight">
@@ -79,10 +79,10 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, onClose }) 
             </div>
           </div>
 
-          <div className="p-6 space-y-5 overflow-y-auto max-h-[calc(100vh-20rem)]">
+          <div className="p-6 space-y-5 overflow-y-auto max-h-[calc(100vh-20rem)] text-slate-700">
             {/* Description and metadata */}
             <div>
-              <p className="text-xs text-slate-500 leading-relaxed font-normal">
+              <p className="text-xs text-slate-505 leading-relaxed font-semibold">
                 {product.description}
               </p>
               <div className="flex items-center gap-3 mt-3.5 text-[11px] font-semibold text-slate-400 font-mono">
@@ -95,7 +95,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, onClose }) 
             </div>
 
             {/* Price section */}
-            <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50/80 border border-slate-100">
+            <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-150">
               <span className="text-xs font-bold text-slate-500">Valor Unitário</span>
               <span className="text-sm font-black text-slate-950 font-mono">
                 {product.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
@@ -114,29 +114,29 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, onClose }) 
                 placeholder="Exemplo: sem cebola, molho à parte, bem passado..."
                 rows={2}
                 maxLength={140}
-                className="w-full text-xs p-3 rounded-lg border border-slate-200 focus:border-rose-500 focus:ring-1 focus:ring-rose-500/30 outline-hidden transition resize-none placeholder-slate-400 font-medium"
+                className="w-full text-xs p-3 rounded-lg border border-slate-200 focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-hidden transition resize-none placeholder-slate-400 font-semibold"
               />
             </div>
 
-            {/* Allergy Flag section (Severe High Contrast Switcher) */}
+            {/* Allergy Flag section (Severe High Contrast Switcher) - Vermelho no Rosa */}
             <div className={`p-4 rounded-xl border transition-all ${
               isAllergy 
-                ? 'bg-rose-50 border-rose-200' 
-                : 'bg-white border-slate-200'
+                ? 'bg-red-50 border-red-200' 
+                : 'bg-white border-slate-205'
             }`}>
               <label className="flex items-start gap-3 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={isAllergy}
                   onChange={(e) => setIsAllergy(e.target.checked)}
-                  className="mt-0.5 rounded border-slate-300 text-rose-500 focus:ring-rose-400"
+                  className="mt-0.5 rounded border-slate-300 text-red-600 focus:ring-red-605"
                 />
                 <div className="flex-1 min-w-0">
-                  <span className="text-xs font-extrabold text-slate-900 flex items-center gap-1">
-                    <AlertTriangle className={`w-3.5 h-3.5 ${isAllergy ? 'text-rose-500 animate-bounce' : 'text-slate-400'}`} />
+                  <span className="text-xs font-black text-slate-900 flex items-center gap-1">
+                    <AlertTriangle className={`w-3.5 h-3.5 ${isAllergy ? 'text-red-600 animate-bounce' : 'text-slate-450'}`} />
                     Atenção Alergias Alimentares
                   </span>
-                  <p className="text-[10px] text-slate-500 select-none mt-0.5">
+                  <p className="text-[10px] text-slate-500 select-none mt-0.5 font-semibold">
                     Selecione se possui alergia severa a algum ingrediente (Ex: amendoim, glúten, lactose).
                   </p>
                 </div>
@@ -150,9 +150,9 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, onClose }) 
                     onChange={(e) => setAllergyDetails(e.target.value)}
                     placeholder="Descreva a restrição detalhadamente (ex: ALERGIA À CEBOLA)"
                     maxLength={80}
-                    className="w-full p-2.5 rounded-md border border-rose-200 bg-white text-xs font-black placeholder-rose-400 text-rose-950 focus:border-rose-500 focus:ring-rose-500/20 outline-hidden"
+                    className="w-full p-2.5 rounded-md border border-red-250 bg-white text-xs font-black placeholder-red-400 text-red-950 focus:border-red-600 focus:ring-red-600/20 outline-hidden"
                   />
-                  <span className="text-[9px] font-semibold text-rose-600 uppercase block mt-1.5 animate-pulse">
+                  <span className="text-[9px] font-black text-red-605 uppercase block mt-1.5 animate-pulse">
                     🚨 ISSO DEIXARÁ O PEDIDO EM ALTA PRIORIDADE NA COZINHA!
                   </span>
                 </div>
@@ -161,12 +161,12 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, onClose }) 
           </div>
 
           {/* Footer Controls */}
-          <div className="p-6 bg-slate-900 border-t border-slate-800 flex items-center justify-between gap-4 shrink-0">
+          <div className="p-6 bg-slate-950 border-t border-slate-900 flex items-center justify-between gap-4 shrink-0">
             {/* Quantity select counter */}
-            <div className="flex items-center bg-slate-800 border border-slate-700/60 rounded-xl p-1 shrink-0">
+            <div className="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-1 shrink-0">
               <button
                 onClick={handleDecrement}
-                className="w-8 h-8 rounded-lg bg-slate-700 hover:bg-slate-600 text-white flex items-center justify-center transition-all cursor-pointer"
+                className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center transition-all cursor-pointer"
                 id="btn-decrement-modal"
               >
                 <Minus className="w-4 h-4" />
@@ -176,21 +176,21 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, onClose }) 
               </span>
               <button
                 onClick={handleIncrement}
-                className="w-8 h-8 rounded-lg bg-slate-700 hover:bg-slate-600 text-white flex items-center justify-center transition-all cursor-pointer"
+                className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center transition-all cursor-pointer"
                 id="btn-increment-modal"
               >
                 <Plus className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Big checkout sum & action submit button */}
+            {/* Big checkout sum & action submit button - Vermelho no Rosa */}
             <button
               onClick={handleAdd}
-              className="flex-1 h-12 bg-rose-500 hover:bg-rose-400 text-white rounded-xl text-xs font-black tracking-wider flex items-center justify-between px-5 transition active:scale-98 shadow-md cursor-pointer"
+              className="flex-1 h-12 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black tracking-widest flex items-center justify-between px-5 transition active:scale-98 shadow-md cursor-pointer border border-red-700"
               id="btn-add-to-cart-submit"
             >
               <span>ADICIONAR AO TOTAL</span>
-              <span className="font-mono bg-rose-600/60 px-3 py-1 rounded-lg">
+              <span className="font-mono bg-red-750 font-black px-3 py-1 rounded-lg">
                 {totalPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
               </span>
             </button>
