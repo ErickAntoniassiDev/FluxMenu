@@ -16,6 +16,16 @@ export interface RegisterRestaurantResult {
   onboarding: OnboardingRepository.OnboardingResult;
 }
 
+export interface PendingOnboarding {
+  email: string;
+  restaurantName: string;
+}
+
+const pendingOnboardingKey = 'flux_pending_onboarding';
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
 
 export function getStoredSession(): SupabaseAuthSession | null {
   return getStoredAuthSession();
@@ -25,20 +35,59 @@ export async function restoreSession(): Promise<SupabaseAuthSession | null> {
   return refreshStoredAuthSession();
 }
 
+export function getPendingOnboarding(email?: string): PendingOnboarding | null {
+  const raw = localStorage.getItem(pendingOnboardingKey);
+  if (!raw) return null;
+  try {
+    const pending = JSON.parse(raw) as PendingOnboarding;
+    if (email && normalizeEmail(pending.email) !== normalizeEmail(email)) return null;
+    return pending;
+  } catch {
+    localStorage.removeItem(pendingOnboardingKey);
+    return null;
+  }
+}
 
+export function savePendingOnboarding(input: PendingOnboarding): void {
+  localStorage.setItem(pendingOnboardingKey, JSON.stringify({
+    email: normalizeEmail(input.email),
+    restaurantName: input.restaurantName.trim()
+  }));
+}
+
+export function clearPendingOnboarding(): void {
+  localStorage.removeItem(pendingOnboardingKey);
+}
 
 export async function resendConfirmationEmail(email: string): Promise<void> {
-  await resendSignupConfirmation(email);
+  await resendSignupConfirmation(normalizeEmail(email));
 }
 
 export async function registerRestaurant(input: RegisterRestaurantInput): Promise<RegisterRestaurantResult> {
-  const session = await signUpWithPassword(input.email, input.password);
-  const onboarding = await OnboardingRepository.createRestaurantOnboarding(input.restaurantName, 'starter');
+  const email = normalizeEmail(input.email);
+  const restaurantName = input.restaurantName.trim();
+  const session = await signUpWithPassword(email, input.password);
+
+  if (!session) {
+    savePendingOnboarding({ email, restaurantName });
+    throw new Error('Conta criada. Confirme o email e depois entre para concluir o cadastro do restaurante.');
+  }
+
+  const onboarding = await OnboardingRepository.createRestaurantOnboarding(restaurantName, 'starter');
+  clearPendingOnboarding();
   return { session, onboarding };
 }
 
+export async function completePendingOnboarding(session: SupabaseAuthSession): Promise<OnboardingRepository.OnboardingResult | null> {
+  const pending = getPendingOnboarding(session.user.email);
+  if (!pending) return null;
+  const onboarding = await OnboardingRepository.createRestaurantOnboarding(pending.restaurantName, 'starter');
+  clearPendingOnboarding();
+  return onboarding;
+}
+
 export async function login(email: string, password: string): Promise<SupabaseAuthSession> {
-  return signInWithPassword(email, password);
+  return signInWithPassword(normalizeEmail(email), password);
 }
 
 export async function logout(): Promise<void> {

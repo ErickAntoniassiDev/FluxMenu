@@ -27,7 +27,9 @@ export const LoginScreen: React.FC = () => {
         await login(email.trim(), password);
       }
     } catch (error) {
-      setLocalError(error instanceof Error ? error.message : mode === 'register' ? 'Não foi possível criar a conta.' : 'Não foi possível entrar.');
+      const message = error instanceof Error ? error.message : mode === 'register' ? 'Não foi possível criar a conta.' : 'Não foi possível entrar.';
+      if (message.includes('Confirme o email')) setLocalSuccess(message);
+      else setLocalError(message);
     }
   };
 
@@ -64,14 +66,14 @@ export const LoginScreen: React.FC = () => {
         <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
           <button
             type="button"
-            onClick={() => setMode('login')}
+            onClick={() => { setMode('login'); setLocalError(null); setLocalSuccess(null); }}
             className={`h-8 rounded-lg text-[10px] font-black uppercase ${mode === 'login' ? 'bg-white text-slate-950 shadow-xs' : 'text-slate-500'}`}
           >
             Entrar
           </button>
           <button
             type="button"
-            onClick={() => setMode('register')}
+            onClick={() => { setMode('register'); setLocalError(null); setLocalSuccess(null); }}
             className={`h-8 rounded-lg text-[10px] font-black uppercase ${mode === 'register' ? 'bg-white text-slate-950 shadow-xs' : 'text-slate-500'}`}
           >
             Criar conta

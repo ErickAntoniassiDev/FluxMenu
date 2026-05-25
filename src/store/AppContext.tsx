@@ -151,7 +151,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAuthError(null);
     try {
       const session = await AuthService.login(email, password);
-      const activeMemberships = await AuthService.getActiveMemberships();
+      let activeMemberships = await AuthService.getActiveMemberships();
+      if (activeMemberships.length === 0) {
+        const onboarding = await AuthService.completePendingOnboarding(session);
+        if (onboarding) {
+          activeMemberships = [{
+            id: 'onboarding-' + onboarding.restaurantId,
+            restaurantId: onboarding.restaurantId,
+            profileId: session.user.id,
+            role: onboarding.memberRole,
+            active: true
+          }];
+          setCurrentPlanIdState(onboarding.planId);
+          localStorage.setItem('flux_current_plan_id', onboarding.planId);
+          addToast('Restaurante criado com sucesso. Bem-vindo ao FluxMenu!', 'success');
+        }
+      }
       if (activeMemberships.length === 0) throw new Error('Usuário não está vinculado a nenhum restaurante ativo.');
       const firstMembership = activeMemberships[0];
       setAuthSession(session);

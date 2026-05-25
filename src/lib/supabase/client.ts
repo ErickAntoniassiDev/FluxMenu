@@ -124,7 +124,7 @@ export async function resendSignupConfirmation(email: string): Promise<void> {
   }
 }
 
-export async function signUpWithPassword(email: string, password: string): Promise<SupabaseAuthSession> {
+export async function signUpWithPassword(email: string, password: string): Promise<SupabaseAuthSession | null> {
   const baseUrl = getSupabaseBaseUrl();
   const response = await fetch(baseUrl + '/auth/v1/signup', {
     method: 'POST',
@@ -148,7 +148,7 @@ export async function signUpWithPassword(email: string, password: string): Promi
 
   const payload = await response.json() as Partial<SupabaseAuthResponse>;
   if (!payload.access_token || !payload.refresh_token || !payload.expires_in || !payload.user?.id) {
-    throw new Error('Conta criada. Confirme o email antes de acessar o FluxMenu.');
+    return null;
   }
 
   const session = toAuthSession(payload as SupabaseAuthResponse);
