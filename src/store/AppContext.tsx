@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { Product, CartItem, Order, OrderStatus, Toast, RestaurantConfig, PaymentLog, UserSession, RolePermissionConfig, RestaurantId } from '../types';
+import { Product, CartItem, Order, OrderStatus, Toast, RestaurantConfig, PaymentLog, UserSession, RolePermissionConfig, RestaurantId, SaaSFeature, SaaSLimit, SaaSPlan, SaaSPlanId } from '../types';
 import { ROLE_PERMISSIONS } from '../utils/rbac';
 import * as CatalogService from '../services/catalogService';
 import * as OrderService from '../services/orderService';
@@ -8,8 +8,16 @@ import * as RestaurantService from '../services/restaurantService';
 import * as TableService from '../services/tableService';
 import { getDefaultUser } from '../services/userService';
 import { getDefaultRestaurantId } from '../data';
+import { DEFAULT_PLAN_ID } from '../data/plans';
+import * as PlanService from '../services/planService';
 
 interface AppContextType {
+  currentPlan: SaaSPlan;
+  currentPlanId: SaaSPlanId;
+  setCurrentPlanId: (planId: SaaSPlanId) => void;
+  canUseFeature: (feature: SaaSFeature) => boolean;
+  getPlanLimit: (limit: SaaSLimit) => number;
+  showUpgradeNotice: (featureName: string) => void;
   activeRestaurantId: RestaurantId;
   setActiveRestaurantId: (restaurantId: RestaurantId) => void;
   products: Product[];
@@ -87,6 +95,20 @@ function getSavedTablesByRestaurant(defaultRestaurantId: RestaurantId): TablesBy
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const defaultRestaurantId = getDefaultRestaurantId();
+  const [currentPlanId, setCurrentPlanIdState] = useState<SaaSPlanId>(() => {
+    const saved = localStorage.getItem('flux_current_plan_id') as SaaSPlanId | null;
+    return saved || DEFAULT_PLAN_ID;
+  });
+  const currentPlan = useMemo(() => PlanService.getPlan(currentPlanId), [currentPlanId]);
+
+  const setCurrentPlanId = (planId: SaaSPlanId) => {
+    setCurrentPlanIdState(planId);
+    localStorage.setItem('flux_current_plan_id', planId);
+  };
+
+  const canUseFeature = (feature: SaaSFeature) => PlanService.canUseFeature(currentPlanId, feature);
+  const getPlanLimit = (limit: SaaSLimit) => PlanService.getPlanLimit(currentPlanId, limit);
+
   const [activeRestaurantId, setActiveRestaurantIdState] = useState<RestaurantId>(() => {
     return localStorage.getItem('flux_active_restaurant_id') || defaultRestaurantId;
   });
@@ -168,6 +190,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const orders = useMemo(() => OrderService.getOrdersForRestaurant(allOrders, activeRestaurantId), [allOrders, activeRestaurantId]);
   const paymentLogs = useMemo(() => PaymentService.getPaymentLogsForRestaurant(allPaymentLogs, activeRestaurantId), [allPaymentLogs, activeRestaurantId]);
 
+  useEffect(() => localStorage.setItem('flux_current_plan_id', currentPlanId), [currentPlanId]);
   useEffect(() => localStorage.setItem('flux_active_restaurant_id', activeRestaurantId), [activeRestaurantId]);
   useEffect(() => localStorage.setItem('flux_current_user', JSON.stringify(currentUser)), [currentUser]);
   useEffect(() => localStorage.setItem('flux_restaurant_configs', JSON.stringify(restaurantConfigs)), [restaurantConfigs]);
@@ -183,6 +206,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCart(prev => prev.filter(item => item.product.restaurantId === activeRestaurantId));
     if (currentUser.restaurantId !== activeRestaurantId) setCurrentUserInternal(getDefaultUser(activeRestaurantId));
   }, [activeRestaurantId]);
+
+  const showUpgradeNotice = (featureName: string) => {
+    addToast(featureName + ' está disponível em um plano superior.', 'info');
+  };
 
   const setActiveRestaurantId = (restaurantId: RestaurantId) => {
     setActiveRestaurantIdState(restaurantId);
@@ -399,6 +426,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   return (
     <AppContext.Provider value={{
+      currentPlan,
+      currentPlanId,
+      setCurrentPlanId,
+      canUseFeature,
+      getPlanLimit,
+      showUpgradeNotice,
       activeRestaurantId,
       setActiveRestaurantId,
       products,

@@ -23,9 +23,12 @@ import {
   Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { UpgradeNotice } from '../shared/UpgradeNotice';
 
 export const CashierPanel: React.FC = () => {
   const {
+    canUseFeature,
+    showUpgradeNotice,
     orders,
     tables,
     checkoutTable,
@@ -34,6 +37,7 @@ export const CashierPanel: React.FC = () => {
     addToast
   } = useApp();
 
+  const canUseAnalytics = canUseFeature('analytics');
   const [activeTab, setActiveTab] = useState<'tables' | 'history'>('tables');
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [tableSearch, setTableSearch] = useState('');
@@ -241,61 +245,61 @@ export const CashierPanel: React.FC = () => {
     <div className="flex-1 bg-slate-50 overflow-y-auto px-4 lg:px-8 py-6 flex flex-col gap-6" id="cashier-panel-container">
       
       {/* SaaS Dashboard Counters - Cores Fortes */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        
-        {/* Metr 1: Faturamento do Dia */}
-        <div className="bg-emerald-600 p-4 rounded-2xl border border-emerald-700 shadow-md flex items-center gap-4 transition hover:scale-101 text-white">
-          <div className="w-12 h-12 rounded-xl bg-white/20 text-white flex items-center justify-center shrink-0">
-            <DollarSign className="w-6 h-6" />
+      {canUseAnalytics ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-emerald-600 p-4 rounded-2xl border border-emerald-700 shadow-md flex items-center gap-4 transition hover:scale-101 text-white">
+            <div className="w-12 h-12 rounded-xl bg-white/20 text-white flex items-center justify-center shrink-0">
+              <DollarSign className="w-6 h-6" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-[10px] font-bold text-emerald-100 uppercase tracking-wider block">Faturamento (Hoje)</span>
+              <span className="text-base md:text-lg font-black font-mono tracking-tight block truncate">
+                {formatCurrency(stats.faturamento)}
+              </span>
+            </div>
           </div>
-          <div className="min-w-0">
-            <span className="text-[10px] font-bold text-emerald-100 uppercase tracking-wider block">Faturamento (Hoje)</span>
-            <span className="text-base md:text-lg font-black font-mono tracking-tight block truncate">
-              {formatCurrency(stats.faturamento)}
-            </span>
+
+          <div className="bg-red-600 p-4 rounded-2xl border border-red-700 shadow-md flex items-center gap-4 transition hover:scale-101 text-white">
+            <div className="w-12 h-12 rounded-xl bg-white/20 text-white flex items-center justify-center shrink-0">
+              <TrendingUp className="w-6 h-6" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-[10px] font-bold text-red-100 uppercase tracking-wider block">Contas Em Aberto</span>
+              <span className="text-base md:text-lg font-black font-mono tracking-tight block truncate">
+                {formatCurrency(stats.openTotal)}
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-slate-950 p-4 rounded-2xl border border-slate-900 shadow-md flex items-center gap-4 transition hover:scale-101 text-white">
+            <div className="w-12 h-12 rounded-xl bg-white/20 text-white flex items-center justify-center shrink-0">
+              <Percent className="w-6 h-6" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">Ticket Médio</span>
+              <span className="text-base md:text-lg font-black font-mono tracking-tight block truncate">
+                {formatCurrency(stats.ticketMedio)}
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-amber-600 p-4 rounded-2xl border border-amber-700 shadow-md flex items-center gap-4 transition hover:scale-101 text-white">
+            <div className="w-12 h-12 rounded-xl bg-white/20 text-white flex items-center justify-center shrink-0">
+              <Receipt className="w-6 h-6" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-[10px] font-bold text-amber-100 uppercase tracking-wider block">Transações</span>
+              <span className="text-base md:text-lg font-black font-mono tracking-tight block truncate">
+                {stats.completedCount} <span className="text-xs text-amber-100 font-normal">pagas</span>
+              </span>
+            </div>
           </div>
         </div>
-
-        {/* Metr 2: Valor em Aberto */}
-        <div className="bg-red-600 p-4 rounded-2xl border border-red-700 shadow-md flex items-center gap-4 transition hover:scale-101 text-white">
-          <div className="w-12 h-12 rounded-xl bg-white/20 text-white flex items-center justify-center shrink-0">
-            <TrendingUp className="w-6 h-6" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[10px] font-bold text-red-100 uppercase tracking-wider block">Contas Em Aberto</span>
-            <span className="text-base md:text-lg font-black font-mono tracking-tight block truncate">
-              {formatCurrency(stats.openTotal)}
-            </span>
-          </div>
-        </div>
-
-        {/* Metr 3: Ticket Médio - Fundo Azul Usar Preto */}
-        <div className="bg-slate-950 p-4 rounded-2xl border border-slate-900 shadow-md flex items-center gap-4 transition hover:scale-101 text-white">
-          <div className="w-12 h-12 rounded-xl bg-white/20 text-white flex items-center justify-center shrink-0">
-            <Percent className="w-6 h-6" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">Ticket Médio</span>
-            <span className="text-base md:text-lg font-black font-mono tracking-tight block truncate">
-              {formatCurrency(stats.ticketMedio)}
-            </span>
-          </div>
-        </div>
-
-        {/* Metr 4: Transações Concluídas */}
-        <div className="bg-amber-600 p-4 rounded-2xl border border-amber-700 shadow-md flex items-center gap-4 transition hover:scale-101 text-white">
-          <div className="w-12 h-12 rounded-xl bg-white/20 text-white flex items-center justify-center shrink-0">
-            <Receipt className="w-6 h-6" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[10px] font-bold text-amber-100 uppercase tracking-wider block">Transações</span>
-            <span className="text-base md:text-lg font-black font-mono tracking-tight block truncate">
-              {stats.completedCount} <span className="text-xs text-amber-100 font-normal">pagas</span>
-            </span>
-          </div>
-        </div>
-
-      </div>
+      ) : (
+        <button onClick={() => showUpgradeNotice('Analytics')} className="text-left">
+          <UpgradeNotice title="Analytics bloqueado" description="Indicadores financeiros e histórico analítico estão disponíveis a partir do plano Pro." />
+        </button>
+      )}
 
       {/* Tabs Switcher */}
       <div className="flex border-b border-slate-200 gap-6">
@@ -315,7 +319,7 @@ export const CashierPanel: React.FC = () => {
           )}
         </button>
         <button
-          onClick={() => setActiveTab('history')}
+          onClick={() => canUseAnalytics ? setActiveTab('history') : showUpgradeNotice('Analytics')}
           className={`pb-3 text-sm font-extrabold transition flex items-center gap-2 relative ${
             activeTab === 'history' ? 'text-slate-900 border-b-2 border-slate-950' : 'text-slate-400 hover:text-slate-600'
           }`}
@@ -861,6 +865,10 @@ export const CashierPanel: React.FC = () => {
 
             </div>
           </>
+        ) : !canUseAnalytics ? (
+          <div className="lg:col-span-12">
+            <UpgradeNotice title="Histórico bloqueado" description="Histórico de vendas e analytics estão disponíveis a partir do plano Pro." />
+          </div>
         ) : (
           /* History tab View (Full Grid width - 12 columns) - Forte e Vibrante */
           <div className="lg:col-span-12 bg-white rounded-2xl border border-slate-205 shadow-xs p-5 flex flex-col gap-5 min-h-0">

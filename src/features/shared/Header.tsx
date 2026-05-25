@@ -13,6 +13,8 @@ import {
   User,
 } from 'lucide-react';
 import { getStaffUsers } from '../../services/userService';
+import { getRestaurants } from '../../services/restaurantService';
+import { SaaSPlanId } from '../../types';
 
 const ROLE_LABEL_PT: Record<string, string> = {
   owner: 'Dono (Owner)',
@@ -34,7 +36,14 @@ const ROLE_COLOR_CLASSES: Record<string, string> = {
 
 export const Header: React.FC = () => {
   const {
+    currentPlan,
+    currentPlanId,
+    setCurrentPlanId,
+    canUseFeature,
+    getPlanLimit,
+    showUpgradeNotice,
     activeRestaurantId,
+    setActiveRestaurantId,
     activeMode,
     setActiveMode,
     restaurantConfig,
@@ -49,6 +58,11 @@ export const Header: React.FC = () => {
   } = useApp();
 
   const staffUsers = getStaffUsers(activeRestaurantId);
+  const userLimit = getPlanLimit('maxStaffUsers');
+  const visibleStaffUsers = userLimit < 0 ? staffUsers : staffUsers.slice(0, userLimit);
+  const restaurants = getRestaurants();
+  const visibleRestaurants = canUseFeature('multiple_units') ? restaurants : restaurants.filter(restaurant => restaurant.id === activeRestaurantId);
+  const canRemoveBranding = canUseFeature('remove_fluxmenu_branding');
 
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -83,7 +97,9 @@ export const Header: React.FC = () => {
                   Live POS
                 </span>
               </div>
-              <p className="text-[8px] text-slate-400 font-mono">FluxMenu RBAC Architecture</p>
+              {!canRemoveBranding && (
+                <p className="text-[8px] text-slate-400 font-mono">FluxMenu RBAC Architecture</p>
+              )}
             </div>
           </div>
 
@@ -199,6 +215,48 @@ export const Header: React.FC = () => {
 
           <div className="h-6 w-px bg-slate-100 hidden sm:block"></div>
 
+          <div className="text-right hidden lg:block select-none">
+            <span className="text-[8px] font-bold text-slate-400 uppercase block tracking-wider leading-none mb-0.5">PLANO</span>
+            <select
+              value={currentPlanId}
+              onChange={(e) => setCurrentPlanId(e.target.value as SaaSPlanId)}
+              className="text-xs text-slate-900 font-extrabold bg-transparent border-0 p-0 text-right uppercase tracking-tight focus:ring-0 cursor-pointer hover:text-red-600 hover:underline"
+              id="header-plan-select"
+            >
+              <option value="starter">Starter</option>
+              <option value="pro">Pro</option>
+              <option value="premium">Premium</option>
+            </select>
+          </div>
+
+          <div className="h-6 w-px bg-slate-100 hidden lg:block"></div>
+
+          <div className="text-right hidden lg:block select-none">
+            <span className="text-[8px] font-bold text-slate-400 uppercase block tracking-wider leading-none mb-0.5">UNIDADE</span>
+            {canUseFeature('multiple_units') ? (
+              <select
+                value={activeRestaurantId}
+                onChange={(e) => setActiveRestaurantId(e.target.value)}
+                className="text-xs text-slate-900 font-extrabold bg-transparent border-0 p-0 text-right uppercase tracking-tight focus:ring-0 cursor-pointer hover:text-red-600 hover:underline"
+                id="header-restaurant-select"
+              >
+                {visibleRestaurants.map(restaurant => (
+                  <option key={restaurant.id} value={restaurant.id}>{restaurant.name}</option>
+                ))}
+              </select>
+            ) : (
+              <button
+                onClick={() => showUpgradeNotice('Múltiplas unidades')}
+                className="text-xs text-slate-900 font-extrabold uppercase tracking-tight hover:text-red-600 hover:underline cursor-pointer"
+                title="Múltiplas unidades exigem Premium"
+              >
+                {restaurantConfig.name}
+              </button>
+            )}
+          </div>
+
+          <div className="h-6 w-px bg-slate-100 hidden lg:block"></div>
+
           {/* Table select widget (Readonly text for customer, Dropdown select for authorized staff) */}
           <div className="text-right hidden sm:block select-none">
             <span className="text-[8px] font-bold text-slate-400 uppercase block tracking-wider leading-none mb-0.5">LOCAL</span>
@@ -269,7 +327,7 @@ export const Header: React.FC = () => {
 
                 {/* Dropdown Options List */}
                 <div className="max-h-72 overflow-y-auto divide-y divide-slate-50">
-                  {staffUsers.map((user) => {
+                  {visibleStaffUsers.map((user) => {
                     const isSelected = user.id === currentUser.id;
                     return (
                       <button
@@ -317,9 +375,19 @@ export const Header: React.FC = () => {
                   })}
                 </div>
 
+                {staffUsers.length > visibleStaffUsers.length && (
+                  <button
+                    onClick={() => showUpgradeNotice('Multiusuários')}
+                    className="w-full p-3 bg-amber-50 text-left border-t border-amber-100 hover:bg-amber-100 transition cursor-pointer"
+                  >
+                    <p className="text-[10px] font-black text-amber-800 uppercase">Upgrade necessário</p>
+                    <p className="text-[9px] text-amber-700 font-semibold mt-0.5">Seu plano atual permite {userLimit} usuário ativo.</p>
+                  </button>
+                )}
+
                 {/* Dropdown Footer */}
                 <div className="p-3 bg-slate-50 text-center border-t border-slate-100">
-                  <p className="text-[9px] text-slate-400 font-medium">As restrições de acesso e as travas de gravação mudam instantaneamente.</p>
+                  <p className="text-[9px] text-slate-400 font-medium">Plano ativo: {currentPlan.name}. As restrições de acesso e as travas de gravação mudam instantaneamente.</p>
                 </div>
 
               </div>

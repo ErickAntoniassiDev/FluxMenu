@@ -6,23 +6,19 @@ export type RestaurantId = string;
 export type SaaSPlanId = 'starter' | 'pro' | 'premium';
 
 export type SaaSFeature =
-  | 'digital_menu'
-  | 'kds'
-  | 'cashier'
-  | 'admin_catalog'
-  | 'qr_tables'
-  | 'payment_history'
-  | 'manual_orders'
-  | 'advanced_reports'
+  | 'analytics'
+  | 'ai'
+  | 'multiple_units'
   | 'multi_user_rbac'
-  | 'priority_support';
+  | 'remove_fluxmenu_branding'
+  | 'advanced_customization'
+  | 'advanced_permissions';
 
 export type SaaSLimit =
   | 'maxProducts'
   | 'maxTables'
   | 'maxStaffUsers'
   | 'maxOrdersPerMonth'
-  | 'paymentHistoryDays'
   | 'maxRestaurants';
 
 export interface SaaSPlan {

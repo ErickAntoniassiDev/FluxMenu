@@ -8,23 +8,19 @@ export const SAAS_PLANS: Record<SaaSPlanId, SaaSPlan> = {
     currency: 'BRL',
     billingPeriod: 'monthly',
     features: {
-      digital_menu: true,
-      kds: true,
-      cashier: false,
-      admin_catalog: true,
-      qr_tables: true,
-      payment_history: false,
-      manual_orders: false,
-      advanced_reports: false,
+      analytics: false,
+      ai: false,
+      multiple_units: false,
       multi_user_rbac: false,
-      priority_support: false
+      remove_fluxmenu_branding: false,
+      advanced_customization: false,
+      advanced_permissions: false
     },
     limits: {
-      maxProducts: 60,
-      maxTables: 12,
-      maxStaffUsers: 3,
-      maxOrdersPerMonth: 800,
-      paymentHistoryDays: 7,
+      maxProducts: -1,
+      maxTables: -1,
+      maxStaffUsers: 1,
+      maxOrdersPerMonth: -1,
       maxRestaurants: 1
     }
   },
@@ -35,24 +31,20 @@ export const SAAS_PLANS: Record<SaaSPlanId, SaaSPlan> = {
     currency: 'BRL',
     billingPeriod: 'monthly',
     features: {
-      digital_menu: true,
-      kds: true,
-      cashier: true,
-      admin_catalog: true,
-      qr_tables: true,
-      payment_history: true,
-      manual_orders: true,
-      advanced_reports: false,
+      analytics: true,
+      ai: false,
+      multiple_units: false,
       multi_user_rbac: true,
-      priority_support: false
+      remove_fluxmenu_branding: true,
+      advanced_customization: false,
+      advanced_permissions: false
     },
     limits: {
-      maxProducts: 250,
-      maxTables: 50,
+      maxProducts: -1,
+      maxTables: -1,
       maxStaffUsers: 15,
-      maxOrdersPerMonth: 5000,
-      paymentHistoryDays: 90,
-      maxRestaurants: 3
+      maxOrdersPerMonth: -1,
+      maxRestaurants: 1
     }
   },
   premium: {
@@ -62,23 +54,19 @@ export const SAAS_PLANS: Record<SaaSPlanId, SaaSPlan> = {
     currency: 'BRL',
     billingPeriod: 'monthly',
     features: {
-      digital_menu: true,
-      kds: true,
-      cashier: true,
-      admin_catalog: true,
-      qr_tables: true,
-      payment_history: true,
-      manual_orders: true,
-      advanced_reports: true,
+      analytics: true,
+      ai: true,
+      multiple_units: true,
       multi_user_rbac: true,
-      priority_support: true
+      remove_fluxmenu_branding: true,
+      advanced_customization: true,
+      advanced_permissions: true
     },
     limits: {
       maxProducts: -1,
       maxTables: -1,
       maxStaffUsers: -1,
       maxOrdersPerMonth: -1,
-      paymentHistoryDays: -1,
       maxRestaurants: 10
     }
   }

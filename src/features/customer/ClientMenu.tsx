@@ -8,8 +8,9 @@ import { CartSidebar } from './CartSidebar';
 import { AnimatePresence, motion } from 'motion/react';
 
 export const ClientMenu: React.FC = () => {
-  const { activeRestaurantId, products, cart, tableNumber } = useApp();
+  const { activeRestaurantId, canUseFeature, products, cart, tableNumber } = useApp();
   const categories = getMenuCategories(activeRestaurantId);
+  const canRemoveBranding = canUseFeature('remove_fluxmenu_branding');
 
   const [selectedCategory, setSelectedCategory] = useState<string>('todos');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -42,6 +43,7 @@ export const ClientMenu: React.FC = () => {
           </h2>
           <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5 tracking-wider">
             Selecione seus itens e envie para a cozinha em tempo real!
+            {!canRemoveBranding && <span className="ml-1 text-red-600">Powered by FluxMenu</span>}
           </p>
         </div>
 

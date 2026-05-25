@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useApp } from '../../store/AppContext';
 import { Product } from '../../types';
 import { getProductCategories } from '../../services/catalogService';
+import { UpgradeNotice } from '../shared/UpgradeNotice';
 import { 
   DollarSign, 
   Layers, 
@@ -25,6 +26,9 @@ import {
 export const AdminPanel: React.FC = () => {
   const {
     activeRestaurantId,
+    currentPlan,
+    canUseFeature,
+    showUpgradeNotice,
     products,
     updateProduct,
     addProduct,
@@ -38,6 +42,11 @@ export const AdminPanel: React.FC = () => {
   } = useApp();
 
   const productCategories = getProductCategories(activeRestaurantId);
+  const canUseAnalytics = canUseFeature('analytics');
+  const canUseAI = canUseFeature('ai');
+  const canUseAdvancedCustomization = canUseFeature('advanced_customization');
+  const canUseAdvancedPermissions = canUseFeature('advanced_permissions');
+  const canRemoveBranding = canUseFeature('remove_fluxmenu_branding');
 
   // Active sub-sections within the Admin
   const [activeTab, setActiveTab] = useState<'catalog' | 'tables' | 'settings'>('catalog');
@@ -118,7 +127,7 @@ export const AdminPanel: React.FC = () => {
         <div>
           <h2 className="text-sm md:text-base font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
             <span className="p-1 px-1.5 rounded-md bg-slate-950 text-white font-mono text-[9px] uppercase font-black">Portal</span>
-            FluxMenu Dashboard
+            {canRemoveBranding ? 'Dashboard' : 'FluxMenu Dashboard'}
           </h2>
           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
             Configurações Administrativas do Cardápio, Preços e Lojas
@@ -126,32 +135,37 @@ export const AdminPanel: React.FC = () => {
         </div>
 
         {/* Core metrics cards - Cores Fortes */}
-        <div className="flex gap-4 flex-wrap w-full md:w-auto">
-          <div className="bg-emerald-600 p-3.5 rounded-xl border border-emerald-700 flex items-center gap-3 shrink-0 flex-1 md:flex-initial text-white shadow-sm">
-            <div className="w-8 h-8 rounded-lg bg-white/20 text-white flex items-center justify-center shrink-0">
-              <DollarSign className="w-4 h-4" />
+        {canUseAnalytics ? (
+          <div className="flex gap-4 flex-wrap w-full md:w-auto">
+            <div className="bg-emerald-600 p-3.5 rounded-xl border border-emerald-700 flex items-center gap-3 shrink-0 flex-1 md:flex-initial text-white shadow-sm">
+              <div className="w-8 h-8 rounded-lg bg-white/20 text-white flex items-center justify-center shrink-0">
+                <DollarSign className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="text-[9px] uppercase font-black text-emerald-100 block leading-none">Faturamento (Entregues)</span>
+                <span className="text-xs font-black font-mono mt-1 block">
+                  {totalRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </span>
+              </div>
             </div>
-            <div>
-              <span className="text-[9px] uppercase font-black text-emerald-100 block leading-none">Faturamento (Entregues)</span>
-              <span className="text-xs font-black font-mono mt-1 block">
-                {totalRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-              </span>
-            </div>
-          </div>
 
-          {/* Fundo Azul Usar Preto e Forte */}
-          <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-900 flex items-center gap-3 shrink-0 flex-1 md:flex-initial text-white shadow-sm">
-            <div className="w-8 h-8 rounded-lg bg-white/20 text-white flex items-center justify-center shrink-0">
-              <TrendingUp className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="text-[9px] uppercase font-black text-slate-300 block leading-none">Pedidos em Produção</span>
-              <span className="text-xs font-black font-mono mt-1 block">
-                {activeOrdersVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-              </span>
+            <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-900 flex items-center gap-3 shrink-0 flex-1 md:flex-initial text-white shadow-sm">
+              <div className="w-8 h-8 rounded-lg bg-white/20 text-white flex items-center justify-center shrink-0">
+                <TrendingUp className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="text-[9px] uppercase font-black text-slate-300 block leading-none">Pedidos em Produção</span>
+                <span className="text-xs font-black font-mono mt-1 block">
+                  {activeOrdersVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <button onClick={() => showUpgradeNotice('Analytics')} className="w-full md:w-auto text-left">
+            <UpgradeNotice title="Analytics bloqueado" description="Métricas e relatórios estão disponíveis a partir do plano Pro." />
+          </button>
+        )}
       </div>
 
       {/* Primary Sub Tabs Row - Vermelho no Rosa */}
@@ -450,6 +464,41 @@ export const AdminPanel: React.FC = () => {
             <div>
               <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">Identidade Corporativa e Estabelecimento</h4>
               <p className="text-[10px] text-slate-400 mt-0.5">Defina logos, descrições e detalhes comerciais expostos no cabeçalho do POS.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              {canUseAI ? (
+                <div className="p-4 bg-slate-950 text-white rounded-xl border border-slate-900">
+                  <h5 className="text-xs font-black uppercase tracking-wider">IA habilitada</h5>
+                  <p className="text-[10px] text-slate-300 mt-1 font-semibold">Recursos inteligentes preparados para o plano {currentPlan.name}.</p>
+                </div>
+              ) : (
+                <button onClick={() => showUpgradeNotice('IA')} className="text-left">
+                  <UpgradeNotice title="IA bloqueada" description="Assistentes e automações inteligentes fazem parte do plano Premium." />
+                </button>
+              )}
+
+              {canUseAdvancedCustomization ? (
+                <div className="p-4 bg-emerald-600 text-white rounded-xl border border-emerald-700">
+                  <h5 className="text-xs font-black uppercase tracking-wider">Personalização avançada</h5>
+                  <p className="text-[10px] text-emerald-50 mt-1 font-semibold">Configurações avançadas liberadas para este plano.</p>
+                </div>
+              ) : (
+                <button onClick={() => showUpgradeNotice('Personalização avançada')} className="text-left">
+                  <UpgradeNotice title="Personalização avançada bloqueada" description="Temas, marca e ajustes avançados são recursos Premium." />
+                </button>
+              )}
+
+              {canUseAdvancedPermissions ? (
+                <div className="p-4 bg-red-600 text-white rounded-xl border border-red-700 md:col-span-2">
+                  <h5 className="text-xs font-black uppercase tracking-wider">Permissões avançadas</h5>
+                  <p className="text-[10px] text-red-50 mt-1 font-semibold">Camada preparada para regras granulares por equipe e unidade.</p>
+                </div>
+              ) : (
+                <button onClick={() => showUpgradeNotice('Permissões avançadas')} className="text-left md:col-span-2">
+                  <UpgradeNotice title="Permissões avançadas bloqueadas" description="Regras granulares por equipe e unidade estão disponíveis no Premium." />
+                </button>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
