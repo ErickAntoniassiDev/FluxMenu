@@ -99,6 +99,39 @@ export function getStoredAuthSession(): SupabaseAuthSession | null {
   return currentAuthSession;
 }
 
+
+export async function signUpWithPassword(email: string, password: string): Promise<SupabaseAuthSession> {
+  const baseUrl = getSupabaseBaseUrl();
+  const response = await fetch(baseUrl + '/auth/v1/signup', {
+    method: 'POST',
+    headers: {
+      apikey: supabaseAnonKey,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ email, password })
+  });
+
+  if (!response.ok) {
+    let message = 'Não foi possível criar a conta.';
+    try {
+      const payload = await response.json() as { error?: string; error_description?: string; msg?: string; message?: string };
+      message = payload.error_description ?? payload.message ?? payload.msg ?? payload.error ?? message;
+    } catch {
+      // Keep the generic message when Supabase does not return a JSON error body.
+    }
+    throw new Error(message);
+  }
+
+  const payload = await response.json() as Partial<SupabaseAuthResponse>;
+  if (!payload.access_token || !payload.refresh_token || !payload.expires_in || !payload.user?.id) {
+    throw new Error('Conta criada. Confirme o email antes de acessar o FluxMenu.');
+  }
+
+  const session = toAuthSession(payload as SupabaseAuthResponse);
+  persistAuthSession(session);
+  return session;
+}
+
 export async function signInWithPassword(email: string, password: string): Promise<SupabaseAuthSession> {
   const baseUrl = getSupabaseBaseUrl();
   const response = await fetch(baseUrl + '/auth/v1/token?grant_type=password', {

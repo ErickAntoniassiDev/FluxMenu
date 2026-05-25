@@ -17,6 +17,7 @@ interface AppContextType {
   authError: string | null;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
+  registerRestaurant: (email: string, password: string, restaurantName: string) => Promise<void>;
   logout: () => Promise<void>;
   currentPlan: SaaSPlan;
   currentPlanId: SaaSPlanId;
@@ -159,6 +160,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.setItem('flux_active_restaurant_id', firstMembership.restaurantId);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Falha ao autenticar.';
+      setAuthError(message);
+      throw error;
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+
+  const registerRestaurant = async (email: string, password: string, restaurantName: string) => {
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const result = await AuthService.registerRestaurant({ email, password, restaurantName });
+      const membership: Membership = {
+        id: 'onboarding-' + result.onboarding.restaurantId,
+        restaurantId: result.onboarding.restaurantId,
+        profileId: result.session.user.id,
+        role: result.onboarding.memberRole,
+        active: true
+      };
+      setAuthSession(result.session);
+      setMemberships([membership]);
+      setActiveRestaurantIdState(result.onboarding.restaurantId);
+      setCurrentUserInternal(AuthService.getUserSessionFromMembership(result.session, membership, result.onboarding.restaurantId));
+      setCurrentPlanIdState(result.onboarding.planId);
+      localStorage.setItem('flux_active_restaurant_id', result.onboarding.restaurantId);
+      localStorage.setItem('flux_current_plan_id', result.onboarding.planId);
+      addToast('Restaurante criado com sucesso. Bem-vindo ao FluxMenu!', 'success');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Falha ao criar conta.';
       setAuthError(message);
       throw error;
     } finally {
@@ -745,6 +776,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       authError,
       isAuthenticated,
       login,
+      registerRestaurant,
       logout,
       currentPlan,
       currentPlanId,
