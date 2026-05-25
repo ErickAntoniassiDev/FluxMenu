@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../../store/AppContext';
-import { Product } from '../../types';
-import { getProductCategories } from '../../services/catalogService';
+import { CategoryOption, Product } from '../../types';
 import { UpgradeNotice } from '../shared/UpgradeNotice';
 import { 
   DollarSign, 
@@ -30,9 +29,13 @@ export const AdminPanel: React.FC = () => {
     canUseFeature,
     showUpgradeNotice,
     products,
+    productCategories,
     updateProduct,
     addProduct,
     deleteProduct,
+    addCategory,
+    updateCategory,
+    deleteCategory,
     orders,
     restaurantConfig,
     setRestaurantConfig,
@@ -41,7 +44,6 @@ export const AdminPanel: React.FC = () => {
     deleteTable
   } = useApp();
 
-  const productCategories = getProductCategories(activeRestaurantId);
   const canUseAnalytics = canUseFeature('analytics');
   const canUseAI = canUseFeature('ai');
   const canUseAdvancedCustomization = canUseFeature('advanced_customization');
@@ -59,9 +61,13 @@ export const AdminPanel: React.FC = () => {
   const [newName, setNewName] = useState('');
   const [newPrice, setNewPrice] = useState(0);
   const [newDesc, setNewDesc] = useState('');
-  const [newCategory, setNewCategory] = useState<'entradas' | 'hamburgueres' | 'pizzas' | 'bebidas' | 'sobremesas'>('entradas');
+  const [newCategory, setNewCategory] = useState<string>('entradas');
   const [newPrep, setNewPrep] = useState(15);
   const [newImage, setNewImage] = useState('https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=cover&q=80');
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [editingCategory, setEditingCategory] = useState<CategoryOption | null>(null);
+  const [adminLoading, setAdminLoading] = useState<string | null>(null);
+  const [adminError, setAdminError] = useState<string | null>(null);
 
   // New tabular inputs
   const [newTableNameInput, setNewTableNameInput] = useState('');
@@ -77,39 +83,74 @@ export const AdminPanel: React.FC = () => {
   }, [orders]);
 
   // Handle Catalog Toggles
+  const runAdminAction = async (loadingKey: string, action: () => Promise<void>) => {
+    setAdminError(null);
+    setAdminLoading(loadingKey);
+    try {
+      await action();
+    } catch (error) {
+      setAdminError(error instanceof Error ? error.message : 'Não foi possível concluir a operação.');
+    } finally {
+      setAdminLoading(null);
+    }
+  };
+
   const handleToggleAvailability = (prod: Product) => {
-    updateProduct({
+    void runAdminAction('product-' + prod.id, () => updateProduct({
       ...prod,
       available: prod.available === false ? true : false
-    });
+    }));
   };
 
-  const handleEditProductSubmit = (e: React.FormEvent) => {
+  const handleEditProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProduct) return;
-    updateProduct(editingProduct);
-    setEditingProduct(null);
+    await runAdminAction('edit-product', async () => {
+      await updateProduct(editingProduct);
+      setEditingProduct(null);
+    });
   };
 
-  const handleAddProductSubmit = (e: React.FormEvent) => {
+  const handleAddProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName.trim() || newPrice <= 0) return;
-    addProduct({
-      name: newName,
-      price: Number(newPrice),
-      description: newDesc,
-      category: newCategory,
-      prepTimeMinutes: Number(newPrep),
-      image: newImage || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=cover&q=80',
-      available: true
+    if (!newName.trim()) return setAdminError('Nome do produto é obrigatório.');
+    if (!newDesc.trim()) return setAdminError('Descrição do produto é obrigatória.');
+    if (!newCategory) return setAdminError('Categoria é obrigatória.');
+    if (newPrice <= 0) return setAdminError('Preço precisa ser maior que zero.');
+    await runAdminAction('add-product', async () => {
+      await addProduct({
+        name: newName,
+        price: Number(newPrice),
+        description: newDesc,
+        category: newCategory as any,
+        prepTimeMinutes: Number(newPrep),
+        image: newImage || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=cover&q=80',
+        available: true
+      });
+      setNewName('');
+      setNewPrice(0);
+      setNewDesc('');
+      setNewPrep(15);
+      setIsAddFormOpen(false);
     });
-    
-    // Clear inputs
-    setNewName('');
-    setNewPrice(0);
-    setNewDesc('');
-    setNewPrep(15);
-    setIsAddFormOpen(false);
+  };
+
+  const handleAddCategorySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCategoryName.trim()) return setAdminError('Nome da categoria é obrigatório.');
+    await runAdminAction('add-category', async () => {
+      await addCategory(newCategoryName);
+      setNewCategoryName('');
+    });
+  };
+
+  const handleEditCategorySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCategory) return;
+    await runAdminAction('edit-category', async () => {
+      await updateCategory(editingCategory);
+      setEditingCategory(null);
+    });
   };
 
   const handleAddTableSubmit = (e: React.FormEvent) => {
@@ -233,6 +274,71 @@ export const AdminPanel: React.FC = () => {
               </button>
             </div>
 
+            {adminError && (
+              <div className="p-3 rounded-xl border border-red-200 bg-red-50 text-red-700 text-xs font-bold">
+                {adminError}
+              </div>
+            )}
+
+            <div className="bg-white p-4 rounded-xl border border-slate-200/65 space-y-3">
+              <div className="flex flex-col md:flex-row md:items-end gap-3 justify-between">
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-tight">Categorias</h3>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Gerencie grupos do cardápio salvos no Supabase.</p>
+                </div>
+                <form onSubmit={handleAddCategorySubmit} className="flex gap-2 w-full md:w-auto">
+                  <input
+                    type="text"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="Nova categoria"
+                    className="flex-1 md:w-52 p-2 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 font-semibold bg-slate-50"
+                  />
+                  <button
+                    type="submit"
+                    disabled={adminLoading === 'add-category'}
+                    className="px-3.5 bg-slate-950 hover:bg-slate-855 disabled:opacity-60 text-white font-black text-xs rounded-lg transition flex items-center gap-1 cursor-pointer"
+                  >
+                    {adminLoading === 'add-category' ? 'Salvando...' : 'Adicionar'}
+                  </button>
+                </form>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {productCategories.map(category => (
+                  <div key={category.id} className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">
+                    {editingCategory?.id === category.id ? (
+                      <form onSubmit={handleEditCategorySubmit} className="flex items-center gap-1">
+                        <input
+                          value={editingCategory.label}
+                          onChange={(e) => setEditingCategory({ ...editingCategory, label: e.target.value })}
+                          className="w-32 p-1 border border-slate-200 rounded text-[10px] font-bold"
+                          autoFocus
+                        />
+                        <button type="submit" disabled={adminLoading === 'edit-category'} className="p-1 text-emerald-700 hover:bg-emerald-50 rounded">
+                          <Check className="w-3.5 h-3.5" />
+                        </button>
+                      </form>
+                    ) : (
+                      <>
+                        <button onClick={() => setEditingCategory(category)} className="text-[10px] font-black uppercase text-slate-800">
+                          {category.label}
+                        </button>
+                        <button
+                          onClick={() => void runAdminAction('delete-category-' + category.id, () => deleteCategory(category))}
+                          disabled={adminLoading === 'delete-category-' + category.id}
+                          className="p-1 text-slate-400 hover:text-red-600 rounded hover:bg-red-50"
+                          title="Remover categoria"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* List products catalog in columns or clean row list */}
             <div className="bg-white rounded-xl border border-slate-100 overflow-hidden shadow-2xs">
               <div className="overflow-x-auto border border-slate-150 rounded-xl">
@@ -283,7 +389,8 @@ export const AdminPanel: React.FC = () => {
                           {/* Cores Fortes */}
                           <button
                             onClick={() => handleToggleAvailability(prod)}
-                            className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase transition flex items-center gap-1 cursor-pointer select-none border ${
+                            disabled={adminLoading === 'product-' + prod.id}
+                            className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase transition flex items-center gap-1 cursor-pointer select-none border disabled:opacity-60 ${
                               prod.available !== false
                                 ? 'bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-700 shadow-xs'
                                 : 'bg-slate-100 text-slate-400 border-slate-250 hover:bg-slate-200'
@@ -315,7 +422,7 @@ export const AdminPanel: React.FC = () => {
 
                           {/* Vermelho no Rosa */}
                           <button
-                            onClick={() => deleteProduct(prod.id)}
+                            onClick={() => void runAdminAction('delete-product-' + prod.id, () => deleteProduct(prod.id))}
                             className="p-1 px-1.5 text-slate-400 hover:text-red-650 hover:bg-red-50 rounded cursor-pointer transition select-none inline-block align-middle active:scale-90"
                             id={`delete-prod-btn-${prod.id}`}
                           >
@@ -640,10 +747,11 @@ export const AdminPanel: React.FC = () => {
 
                 <button
                   type="submit"
-                  className="w-full h-11 bg-slate-950 hover:bg-slate-855 text-white rounded-xl text-xs font-black uppercase transition shrink-0 cursor-pointer"
+                  disabled={adminLoading === 'edit-product'}
+                  className="w-full h-11 bg-slate-950 disabled:opacity-60 hover:bg-slate-855 text-white rounded-xl text-xs font-black uppercase transition shrink-0 cursor-pointer"
                   id="edit-prod-submit-inner"
                 >
-                  Confirmar Alterações
+                  {adminLoading === 'edit-product' ? 'Salvando...' : 'Confirmar Alterações'}
                 </button>
               </form>
             </div>
@@ -753,10 +861,11 @@ export const AdminPanel: React.FC = () => {
                 {/* Vermelho no Rosa */}
                 <button
                   type="submit"
-                  className="w-full h-11 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black uppercase transition shrink-0 cursor-pointer shadow-md"
+                  disabled={adminLoading === 'add-product'}
+                  className="w-full h-11 bg-red-600 disabled:opacity-60 hover:bg-red-700 text-white rounded-xl text-xs font-black uppercase transition shrink-0 cursor-pointer shadow-md"
                   id="add-prod-submit-form"
                 >
-                  Salvar Produto no FluxMenu
+                  {adminLoading === 'add-product' ? 'Salvando...' : 'Salvar Produto'}
                 </button>
               </form>
             </div>

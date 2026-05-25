@@ -5,16 +5,14 @@ import {
   Smartphone, 
   ChefHat, 
   Layers, 
-  Plus, 
   Sliders, 
   Receipt, 
   ShieldCheck, 
   ChevronDown, 
   User,
+  LogOut,
 } from 'lucide-react';
 import { getStaffUsers } from '../../services/userService';
-import { getRestaurants } from '../../services/restaurantService';
-import { SaaSPlanId } from '../../types';
 
 const ROLE_LABEL_PT: Record<string, string> = {
   owner: 'Dono (Owner)',
@@ -37,22 +35,18 @@ const ROLE_COLOR_CLASSES: Record<string, string> = {
 export const Header: React.FC = () => {
   const {
     currentPlan,
-    currentPlanId,
-    setCurrentPlanId,
-    canUseFeature,
     getPlanLimit,
     showUpgradeNotice,
     activeRestaurantId,
-    setActiveRestaurantId,
     activeMode,
     setActiveMode,
     restaurantConfig,
     tableNumber,
     setTableNumber,
-    createManualOrder,
     tables,
     currentUser,
     setCurrentUser,
+    logout,
     hasPermission,
     isModeAllowed,
   } = useApp();
@@ -60,9 +54,7 @@ export const Header: React.FC = () => {
   const staffUsers = getStaffUsers(activeRestaurantId);
   const userLimit = getPlanLimit('maxStaffUsers');
   const visibleStaffUsers = userLimit < 0 ? staffUsers : staffUsers.slice(0, userLimit);
-  const restaurants = getRestaurants();
-  const visibleRestaurants = canUseFeature('multiple_units') ? restaurants : restaurants.filter(restaurant => restaurant.id === activeRestaurantId);
-  const canRemoveBranding = canUseFeature('remove_fluxmenu_branding');
+  const canRemoveBranding = currentPlan.features.remove_fluxmenu_branding;
 
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -98,7 +90,7 @@ export const Header: React.FC = () => {
                 </span>
               </div>
               {!canRemoveBranding && (
-                <p className="text-[8px] text-slate-400 font-mono">FluxMenu RBAC Architecture</p>
+                <p className="text-[8px] text-slate-400 font-mono">FluxMenu</p>
               )}
             </div>
           </div>
@@ -200,59 +192,18 @@ export const Header: React.FC = () => {
         {/* Operational controls and access profile selector */}
         <div className="flex items-center justify-between md:justify-end gap-3 w-full md:w-auto shrink-0 border-t border-slate-100/40 pt-2 md:pt-0 md:border-t-0">
           
-          {/* Manual order entry dispatcher (only visible if allowed) */}
-          {hasPermission('canCreateManualOrders') && (
-            <button
-              onClick={createManualOrder}
-              className="px-2 py-1.5 bg-red-600 text-white rounded-lg text-[10px] md:text-xs font-bold hover:bg-red-700 transition-all duration-200 active:scale-95 flex items-center gap-1 shrink-0 shadow-sm cursor-pointer"
-              title="Registrar uma nova entrada operacional para acompanhar o fluxo de KDS/Caixa"
-              id="manual-order-btn"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline leading-none">Nova Entrada</span>
-            </button>
-          )}
-
           <div className="h-6 w-px bg-slate-100 hidden sm:block"></div>
 
           <div className="text-right hidden lg:block select-none">
             <span className="text-[8px] font-bold text-slate-400 uppercase block tracking-wider leading-none mb-0.5">PLANO</span>
-            <select
-              value={currentPlanId}
-              onChange={(e) => setCurrentPlanId(e.target.value as SaaSPlanId)}
-              className="text-xs text-slate-900 font-extrabold bg-transparent border-0 p-0 text-right uppercase tracking-tight focus:ring-0 cursor-pointer hover:text-red-600 hover:underline"
-              id="header-plan-select"
-            >
-              <option value="starter">Starter</option>
-              <option value="pro">Pro</option>
-              <option value="premium">Premium</option>
-            </select>
+            <span className="text-xs text-slate-900 font-extrabold uppercase tracking-tight block">{currentPlan.name}</span>
           </div>
 
           <div className="h-6 w-px bg-slate-100 hidden lg:block"></div>
 
           <div className="text-right hidden lg:block select-none">
             <span className="text-[8px] font-bold text-slate-400 uppercase block tracking-wider leading-none mb-0.5">UNIDADE</span>
-            {canUseFeature('multiple_units') ? (
-              <select
-                value={activeRestaurantId}
-                onChange={(e) => setActiveRestaurantId(e.target.value)}
-                className="text-xs text-slate-900 font-extrabold bg-transparent border-0 p-0 text-right uppercase tracking-tight focus:ring-0 cursor-pointer hover:text-red-600 hover:underline"
-                id="header-restaurant-select"
-              >
-                {visibleRestaurants.map(restaurant => (
-                  <option key={restaurant.id} value={restaurant.id}>{restaurant.name}</option>
-                ))}
-              </select>
-            ) : (
-              <button
-                onClick={() => showUpgradeNotice('Múltiplas unidades')}
-                className="text-xs text-slate-900 font-extrabold uppercase tracking-tight hover:text-red-600 hover:underline cursor-pointer"
-                title="Múltiplas unidades exigem Premium"
-              >
-                {restaurantConfig.name}
-              </button>
-            )}
+            <span className="text-xs text-slate-900 font-extrabold uppercase tracking-tight block">{restaurantConfig.name}</span>
           </div>
 
           <div className="h-6 w-px bg-slate-100 hidden lg:block"></div>
@@ -320,7 +271,7 @@ export const Header: React.FC = () => {
                     <ShieldCheck className="w-4.5 h-4.5 text-slate-700" />
                     <div>
                       <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-tight">Perfis de Acesso</h3>
-                      <p className="text-[10px] text-slate-400">Clique para alternar as permissões em tempo real</p>
+                      <p className="text-[10px] text-slate-400">Selecione um perfil operacional</p>
                     </div>
                   </div>
                 </div>
@@ -386,8 +337,15 @@ export const Header: React.FC = () => {
                 )}
 
                 {/* Dropdown Footer */}
-                <div className="p-3 bg-slate-50 text-center border-t border-slate-100">
-                  <p className="text-[9px] text-slate-400 font-medium">Plano ativo: {currentPlan.name}. As restrições de acesso e as travas de gravação mudam instantaneamente.</p>
+                <div className="p-3 bg-slate-50 border-t border-slate-100 space-y-2">
+                  <p className="text-[9px] text-slate-400 font-medium text-center">Plano ativo: {currentPlan.name}. As permissões acompanham a assinatura atual.</p>
+                  <button
+                    onClick={() => void logout()}
+                    className="w-full h-8 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-red-600 hover:border-red-200 text-[10px] font-black uppercase flex items-center justify-center gap-1.5"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    Sair
+                  </button>
                 </div>
 
               </div>

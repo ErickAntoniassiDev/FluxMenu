@@ -1,5 +1,5 @@
 import * as OrderRepository from '../repositories/orderRepository';
-import { CartItem, Order, OrderItem, OrderStatus, Product, RestaurantId } from '../types';
+import { CartItem, Order, OrderItem, OrderStatus, RestaurantId } from '../types';
 
 export function getOrders(restaurantId: RestaurantId): Order[] {
   return OrderRepository.findInitialOrders()
@@ -59,36 +59,6 @@ export function updateOrderStatus(orders: Order[], orderId: string, restaurantId
 
 export function archiveOrder(orders: Order[], orderId: string, restaurantId: RestaurantId): Order[] {
   return orders.filter(order => !(order.id === orderId && order.restaurantId === restaurantId));
-}
-
-export function createManualOrder(tables: string[], products: Product[], restaurantId: RestaurantId): Order | null {
-  const randomTable = tables[Math.floor(Math.random() * tables.length)];
-  const activeProducts = products.filter(product => product.restaurantId === restaurantId && product.available);
-  if (!randomTable || activeProducts.length === 0) return null;
-
-  const chosenProduct = activeProducts[Math.floor(Math.random() * activeProducts.length)];
-  const randomItems: OrderItem[] = [
-    {
-      productId: chosenProduct.id,
-      name: chosenProduct.name,
-      quantity: Math.floor(Math.random() * 2) + 1,
-      observation: Math.random() > 0.6 ? 'Sem cebola / Ponto médio' : '',
-      price: chosenProduct.price
-    }
-  ];
-
-  return {
-    id: generateOrderId(),
-    restaurantId,
-    table: randomTable,
-    items: randomItems,
-    status: 'novo',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    total: randomItems.reduce((acc, item) => acc + (item.price * item.quantity), 0),
-    priority: Math.random() > 0.75 ? 'alta' : 'media',
-    notes: ''
-  };
 }
 
 export function getCartTotal(cart: CartItem[]): number {

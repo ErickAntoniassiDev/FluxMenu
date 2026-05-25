@@ -42,7 +42,7 @@ export const ClientMenu: React.FC = () => {
             Cardápio Interativo ({tableNumber})
           </h2>
           <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5 tracking-wider">
-            Selecione seus itens e envie para a cozinha em tempo real!
+            Selecione seus itens e envie para a cozinha.
             {!canRemoveBranding && <span className="ml-1 text-red-600">Powered by FluxMenu</span>}
           </p>
         </div>

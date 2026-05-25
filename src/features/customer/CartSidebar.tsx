@@ -98,7 +98,7 @@ export const CartSidebar: React.FC<CartSidebarProps> = ({ isOpen, onClose }) => 
                     <div className="p-3 bg-slate-950 border border-slate-900 rounded-xl flex items-start gap-2 text-white shadow-sm">
                       <Sparkles className="w-4 h-4 shrink-0 text-red-500 mt-0.5 animate-pulse" />
                       <div className="text-[10px] leading-tight font-semibold">
-                        Seu pedido é enviado em tempo real para a cozinha! Acompanhe o progresso no KDS.
+                        Seu pedido será enviado para a cozinha. Acompanhe o progresso no KDS.
                       </div>
                     </div>
 
@@ -207,7 +207,7 @@ export const CartSidebar: React.FC<CartSidebarProps> = ({ isOpen, onClose }) => 
                   </button>
 
                   <p className="text-[9px] text-center text-slate-400 font-extrabold uppercase tracking-wider mt-3">
-                    Isso gerará relatórios em tempo real no dashboard da cozinha!
+                    Isso atualiza o fluxo operacional da cozinha.
                   </p>
                 </div>
               )}

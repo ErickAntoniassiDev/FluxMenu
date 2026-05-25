@@ -6,6 +6,7 @@ import { KitchenPanel } from './features/kitchen/KitchenPanel';
 import { AdminPanel } from './features/admin/AdminPanel';
 import { CashierPanel } from './features/cashier/CashierPanel';
 import { ToastContainer } from './features/shared/ToastContainer';
+import { LoginScreen } from './features/shared/LoginScreen';
 import { HashRouter, useLocation, useNavigate } from 'react-router-dom';
 
 const RouteSynchronizer: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -44,6 +45,16 @@ const RouteSynchronizer: React.FC<{ children: React.ReactNode }> = ({ children }
   return <>{children}</>;
 };
 
+const ProtectedView: React.FC<{ mode: 'admin' | 'kitchen' | 'cashier' | 'split'; children: React.ReactNode }> = ({ mode, children }) => {
+  const { authLoading, isAuthenticated, isModeAllowed } = useApp();
+  if (authLoading) return <div className="h-full w-full flex items-center justify-center text-xs font-black text-slate-500 uppercase">Carregando sessão...</div>;
+  if (!isAuthenticated) return <LoginScreen />;
+  if (!isModeAllowed(mode)) {
+    return <div className="h-full w-full flex items-center justify-center text-xs font-black text-red-600 uppercase">Acesso não autorizado para este perfil.</div>;
+  }
+  return <>{children}</>;
+};
+
 const AppContent: React.FC = () => {
   const { activeMode } = useApp();
   const location = useLocation();
@@ -53,6 +64,7 @@ const AppContent: React.FC = () => {
   if (path === '/portal') {
     return (
       <RouteSynchronizer>
+        <ProtectedView mode={activeMode === 'client' ? 'admin' : activeMode as 'admin' | 'kitchen' | 'cashier' | 'split'}>
         <div className="h-screen w-screen flex flex-col overflow-hidden bg-slate-50 font-sans" id="main-app-viewport">
           {/* Universal Multi-Interface Switcher Header - Only visible on Owner Portal */}
           <Header />
@@ -101,6 +113,7 @@ const AppContent: React.FC = () => {
           {/* Persistent global notification overlay */}
           <ToastContainer />
         </div>
+        </ProtectedView>
       </RouteSynchronizer>
     );
   }
@@ -113,23 +126,29 @@ const AppContent: React.FC = () => {
           {(() => {
             if (path === '/kitchen' || path === '/kds') {
               return (
-                <div className="flex-1 h-full overflow-hidden">
-                  <KitchenPanel />
-                </div>
+                <ProtectedView mode="kitchen">
+                  <div className="flex-1 h-full overflow-hidden">
+                    <KitchenPanel />
+                  </div>
+                </ProtectedView>
               );
             }
             if (path === '/cashier' || path === '/caixa') {
               return (
-                <div className="flex-1 h-full overflow-hidden">
-                  <CashierPanel />
-                </div>
+                <ProtectedView mode="cashier">
+                  <div className="flex-1 h-full overflow-hidden">
+                    <CashierPanel />
+                  </div>
+                </ProtectedView>
               );
             }
             if (path === '/admin') {
               return (
-                <div className="flex-1 h-full overflow-hidden">
-                  <AdminPanel />
-                </div>
+                <ProtectedView mode="admin">
+                  <div className="flex-1 h-full overflow-hidden">
+                    <AdminPanel />
+                  </div>
+                </ProtectedView>
               );
             }
             // Fallbacks: '/' or '/client' renders the client-facing digital menu

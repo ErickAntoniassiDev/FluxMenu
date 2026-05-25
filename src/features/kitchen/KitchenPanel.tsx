@@ -1,13 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../../store/AppContext';
 import { KitchenOrderCard } from './KitchenOrderCard';
-import { ChefHat, Search, RefreshCcw, Trash2 } from 'lucide-react';
+import { ChefHat, Search, Trash2 } from 'lucide-react';
 
 export const KitchenPanel: React.FC = () => {
   const {
     orders,
     clearAllOrders,
-    resetInitialOrders,
     tick
   } = useApp();
 
@@ -136,15 +135,6 @@ export const KitchenPanel: React.FC = () => {
 
         {/* Right DB triggers */}
         <div className="flex gap-2">
-          <button
-            onClick={resetInitialOrders}
-            className="p-2 border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition cursor-pointer select-none"
-            title="Restaurar pedidos iniciais do turno"
-            id="kds-btn-reset-orders"
-          >
-            <RefreshCcw className="w-4 h-4" />
-          </button>
-
           <button
             onClick={clearAllOrders}
             className="px-3 py-2 text-xs border border-red-900 bg-red-955/30 text-red-500 hover:bg-red-900 hover:text-white rounded-lg transition cursor-pointer flex items-center gap-1.5 font-bold"

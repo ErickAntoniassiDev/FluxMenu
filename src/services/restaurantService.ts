@@ -1,6 +1,15 @@
+import { logDataSource, logSupabaseFallback } from '../lib/supabase/client';
 import * as RestaurantRepository from '../repositories/restaurantRepository';
 import * as RestaurantSupabaseRepository from '../repositories/supabase/restaurantSupabaseRepository';
 import { Restaurant, RestaurantConfig, RestaurantId } from '../types';
+
+type DataSource = 'supabase' | 'fallback';
+
+export interface RestaurantsLoadResult {
+  restaurants: Restaurant[];
+  profiles: RestaurantConfig[];
+  source: DataSource;
+}
 
 let restaurantsCache: Restaurant[] | null = null;
 let restaurantProfilesCache: RestaurantConfig[] | null = null;
@@ -18,19 +27,40 @@ export function getRestaurantProfiles(): RestaurantConfig[] {
   return (restaurantProfilesCache ?? RestaurantRepository.findAllRestaurantProfiles()).map(profile => ({ ...profile }));
 }
 
-export async function getRestaurantProfilesWithFallback(): Promise<RestaurantConfig[]> {
+export async function loadRestaurantsWithFallback(): Promise<RestaurantsLoadResult> {
   try {
-    const profiles = await RestaurantSupabaseRepository.findAllRestaurantProfiles();
-    if (profiles.length > 0) {
-      restaurantProfilesCache = profiles;
-      return getRestaurantProfiles();
+    const [restaurants, profiles] = await Promise.all([
+      RestaurantSupabaseRepository.findAllRestaurants(),
+      RestaurantSupabaseRepository.findAllRestaurantProfiles()
+    ]);
+
+    if (restaurants.length > 0) {
+      restaurantsCache = restaurants;
+      restaurantProfilesCache = profiles.length > 0 ? profiles : restaurants.map(restaurant => ({
+        restaurantId: restaurant.id,
+        name: restaurant.name,
+        rating: '4.9',
+        deliveryEstimate: '15-25 min',
+        address: '',
+        instagram: ''
+      }));
+      logDataSource('restaurants', 'supabase', { restaurants: restaurantsCache.length, settings: restaurantProfilesCache.length });
+      return { restaurants: getRestaurants(), profiles: getRestaurantProfiles(), source: 'supabase' };
     }
   } catch (error) {
-    console.warn('Supabase restaurant settings read failed. Falling back to local data.', error);
+    logSupabaseFallback('restaurants', error);
   }
 
+  restaurantsCache = null;
   restaurantProfilesCache = null;
-  return getRestaurantProfiles();
+  const restaurants = getRestaurants();
+  const profiles = getRestaurantProfiles();
+  logDataSource('restaurants', 'fallback', { restaurants: restaurants.length, settings: profiles.length });
+  return { restaurants, profiles, source: 'fallback' };
+}
+
+export async function getRestaurantProfilesWithFallback(): Promise<RestaurantConfig[]> {
+  return (await loadRestaurantsWithFallback()).profiles;
 }
 
 export function getRestaurantConfigForActive(configs: RestaurantConfig[], restaurantId: RestaurantId): RestaurantConfig {
@@ -48,16 +78,5 @@ export function getRestaurants(): Restaurant[] {
 }
 
 export async function getRestaurantsWithFallback(): Promise<Restaurant[]> {
-  try {
-    const restaurants = await RestaurantSupabaseRepository.findAllRestaurants();
-    if (restaurants.length > 0) {
-      restaurantsCache = restaurants;
-      return getRestaurants();
-    }
-  } catch (error) {
-    console.warn('Supabase restaurants read failed. Falling back to local data.', error);
-  }
-
-  restaurantsCache = null;
-  return getRestaurants();
+  return (await loadRestaurantsWithFallback()).restaurants;
 }

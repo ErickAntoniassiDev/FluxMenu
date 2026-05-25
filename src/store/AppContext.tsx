@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { Product, CartItem, Order, OrderStatus, Toast, RestaurantConfig, PaymentLog, UserSession, RolePermissionConfig, RestaurantId, SaaSFeature, SaaSLimit, SaaSPlan, SaaSPlanId } from '../types';
+import { Product, CartItem, Order, OrderStatus, Toast, RestaurantConfig, PaymentLog, UserSession, RolePermissionConfig, RestaurantId, SaaSFeature, SaaSLimit, SaaSPlan, SaaSPlanId, CategoryOption } from '../types';
 import { ROLE_PERMISSIONS } from '../utils/rbac';
 import * as CatalogService from '../services/catalogService';
 import * as OrderService from '../services/orderService';
@@ -8,8 +8,16 @@ import * as RestaurantService from '../services/restaurantService';
 import * as TableService from '../services/tableService';
 import { getDefaultUser } from '../services/userService';
 import * as PlanService from '../services/planService';
+import * as AuthService from '../services/authService';
+import { isSupabaseConfigured, SupabaseAuthSession } from '../lib/supabase/client';
 
 interface AppContextType {
+  authSession: SupabaseAuthSession | null;
+  authLoading: boolean;
+  authError: string | null;
+  isAuthenticated: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
   currentPlan: SaaSPlan;
   currentPlanId: SaaSPlanId;
   setCurrentPlanId: (planId: SaaSPlanId) => void;
@@ -19,6 +27,7 @@ interface AppContextType {
   activeRestaurantId: RestaurantId;
   setActiveRestaurantId: (restaurantId: RestaurantId) => void;
   products: Product[];
+  productCategories: CategoryOption[];
   orders: Order[];
   cart: CartItem[];
   tableNumber: string;
@@ -41,14 +50,15 @@ interface AppContextType {
   updateOrderStatus: (orderId: string, nextStatus: OrderStatus) => void;
   archiveOrder: (orderId: string) => void;
   clearAllOrders: () => void;
-  resetInitialOrders: () => void;
-  createManualOrder: () => void;
   paymentLogs: PaymentLog[];
   checkoutTable: (table: string, paymentMethod: 'pix' | 'credito' | 'debito' | 'dinheiro') => void;
   clearPaymentHistory: () => void;
-  updateProduct: (updated: Product) => void;
-  addProduct: (newProd: Omit<Product, 'id' | 'restaurantId'>) => void;
-  deleteProduct: (id: string) => void;
+  updateProduct: (updated: Product) => Promise<void>;
+  addProduct: (newProd: Omit<Product, 'id' | 'restaurantId'>) => Promise<void>;
+  deleteProduct: (id: string) => Promise<void>;
+  addCategory: (name: string) => Promise<void>;
+  updateCategory: (category: CategoryOption) => Promise<void>;
+  deleteCategory: (category: CategoryOption) => Promise<void>;
   restaurantConfig: RestaurantConfig;
   setRestaurantConfig: (config: RestaurantConfig) => void;
   tables: string[];
@@ -58,6 +68,7 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 type TablesByRestaurant = Record<RestaurantId, string[]>;
+type Membership = AuthService.AuthMembership;
 
 function readJson<T>(key: string): T | null {
   const saved = localStorage.getItem(key);
@@ -91,13 +102,26 @@ function getSavedTablesByRestaurant(defaultRestaurantId: RestaurantId): TablesBy
   return { [defaultRestaurantId]: legacyTables };
 }
 
+function mergeTablesByRestaurant(current: TablesByRestaurant, incoming: TablesByRestaurant): TablesByRestaurant {
+  return Object.entries(incoming).reduce<TablesByRestaurant>((acc, [restaurantId, tables]) => {
+    acc[restaurantId] = [...tables];
+    return acc;
+  }, { ...current });
+}
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const defaultRestaurantId = RestaurantService.getDefaultRestaurantId();
+  const supabaseConfigured = isSupabaseConfigured();
+  const [authSession, setAuthSession] = useState<SupabaseAuthSession | null>(() => AuthService.getStoredSession());
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [memberships, setMemberships] = useState<Membership[]>([]);
+  const isAuthenticated = !!authSession;
   const [currentPlanId, setCurrentPlanIdState] = useState<SaaSPlanId>(() => {
     const saved = localStorage.getItem('flux_current_plan_id') as SaaSPlanId | null;
     return saved || PlanService.getDefaultPlanId();
   });
-  const currentPlan = useMemo(() => PlanService.getPlan(currentPlanId), [currentPlanId]);
+  const currentPlan = PlanService.getPlan(currentPlanId);
 
   const setCurrentPlanId = (planId: SaaSPlanId) => {
     setCurrentPlanIdState(planId);
@@ -108,7 +132,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const getPlanLimit = (limit: SaaSLimit) => PlanService.getPlanLimit(currentPlanId, limit);
 
   const [activeRestaurantId, setActiveRestaurantIdState] = useState<RestaurantId>(() => {
-    return localStorage.getItem('flux_active_restaurant_id') || defaultRestaurantId;
+    return supabaseConfigured ? defaultRestaurantId : localStorage.getItem('flux_active_restaurant_id') || defaultRestaurantId;
   });
 
   const [currentUser, setCurrentUserInternal] = useState<UserSession>(() => {
@@ -117,12 +141,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return getDefaultUser(activeRestaurantId);
   });
 
+  const login = async (email: string, password: string) => {
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const session = await AuthService.login(email, password);
+      const activeMemberships = await AuthService.getActiveMemberships();
+      if (activeMemberships.length === 0) throw new Error('Usuário não está vinculado a nenhum restaurante ativo.');
+      const firstMembership = activeMemberships[0];
+      setAuthSession(session);
+      setMemberships(activeMemberships);
+      setActiveRestaurantIdState(firstMembership.restaurantId);
+      setCurrentUserInternal(AuthService.getUserSessionFromMembership(session, firstMembership, firstMembership.restaurantId));
+      localStorage.setItem('flux_active_restaurant_id', firstMembership.restaurantId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Falha ao autenticar.';
+      setAuthError(message);
+      throw error;
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const logout = async () => {
+    setAuthLoading(true);
+    try {
+      await AuthService.logout();
+      setAuthSession(null);
+      setMemberships([]);
+      setCurrentUserInternal(getDefaultUser(defaultRestaurantId));
+      setActiveRestaurantIdState(defaultRestaurantId);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   const [activeMode, setActiveModeState] = useState<'client' | 'kitchen' | 'cashier' | 'admin' | 'split'>(() => {
     const savedMode = localStorage.getItem('flux_active_mode') as any;
     const allowed = ROLE_PERMISSIONS[currentUser.role].allowedModes;
     if (savedMode && allowed.includes(savedMode)) return savedMode;
     return allowed.includes('split') ? 'split' : allowed[0];
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    async function restorePersistedSession() {
+      if (!authSession) return;
+      setAuthLoading(true);
+      try {
+        const restored = await AuthService.restoreSession();
+        if (!cancelled) setAuthSession(restored);
+      } finally {
+        if (!cancelled) setAuthLoading(false);
+      }
+    }
+    void restorePersistedSession();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const [tick, setTick] = useState<number>(0);
   useEffect(() => {
@@ -139,6 +216,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const removeToast = (id: string) => setToasts(prev => prev.filter(t => t.id !== id));
 
   const [restaurantConfigs, setRestaurantConfigs] = useState<RestaurantConfig[]>(() => {
+    if (supabaseConfigured) return [];
     const saved = readJson<RestaurantConfig[]>('flux_restaurant_configs');
     const legacyConfig = readJson<RestaurantConfig>('flux_restaurant_config');
     const seed = RestaurantService.getRestaurantProfiles();
@@ -147,6 +225,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [allProducts, setAllProducts] = useState<Product[]>(() => {
+    if (supabaseConfigured) return [];
     const saved = readJson<Product[]>('flux_products');
     const normalizedSaved = saved ? CatalogService.ensureProductRestaurantIds(saved, defaultRestaurantId) : null;
     const seed = [...CatalogService.getProducts('rest_gusto'), ...CatalogService.getProducts('rest_bistro')];
@@ -154,6 +233,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [tablesByRestaurant, setTablesByRestaurant] = useState<TablesByRestaurant>(() => {
+    if (supabaseConfigured) return {};
     const saved = getSavedTablesByRestaurant(defaultRestaurantId) ?? {};
     return {
       rest_gusto: saved.rest_gusto ?? TableService.getTables('rest_gusto'),
@@ -162,10 +242,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [tableNumber, setTableNumberState] = useState<string>(() => {
+    if (supabaseConfigured) return '';
     return localStorage.getItem('flux_current_table_' + activeRestaurantId) || TableService.getTables(activeRestaurantId)[0] || 'Mesa 01';
   });
 
   const [allOrders, setAllOrders] = useState<Order[]>(() => {
+    if (supabaseConfigured) return [];
     const saved = readJson<Order[]>('flux_orders');
     const normalizedSaved = saved ? OrderService.ensureOrderRestaurantIds(saved, defaultRestaurantId) : null;
     const seed = [...OrderService.getOrders('rest_gusto'), ...OrderService.getOrders('rest_bistro')];
@@ -173,11 +255,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [cart, setCart] = useState<CartItem[]>(() => {
+    if (supabaseConfigured) return [];
     const saved = readJson<CartItem[]>('flux_cart_' + activeRestaurantId) ?? readJson<CartItem[]>('flux_cart');
     return saved?.filter(item => item.product.restaurantId === activeRestaurantId) ?? [];
   });
 
+  const [categoryVersion, setCategoryVersion] = useState(0);
+
   const [allPaymentLogs, setAllPaymentLogs] = useState<PaymentLog[]>(() => {
+    if (supabaseConfigured) return [];
     const saved = readJson<PaymentLog[]>('flux_payment_logs');
     return saved ? PaymentService.ensurePaymentLogRestaurantIds(saved, defaultRestaurantId) : [];
   });
@@ -186,55 +272,115 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let cancelled = false;
 
     async function hydrateSupabaseReads() {
-      const [, remoteProfiles, remoteProducts] = await Promise.all([
-        RestaurantService.getRestaurantsWithFallback(),
-        RestaurantService.getRestaurantProfilesWithFallback(),
-        CatalogService.getAllProductsWithFallback()
+      const [restaurantLoad, catalogLoad, tableLoad, planLoad, activeMemberships] = await Promise.all([
+        RestaurantService.loadRestaurantsWithFallback(),
+        CatalogService.loadProductsWithFallback(),
+        TableService.loadTablesWithFallback(),
+        PlanService.loadPlansWithFallback(),
+        authSession ? AuthService.getActiveMemberships() : Promise.resolve([])
       ]);
 
       if (cancelled) return;
 
-      setRestaurantConfigs(prev => mergeConfigsByRestaurantId(prev, remoteProfiles));
-      setAllProducts(prev => mergeByRestaurantIdAndId(prev, CatalogService.ensureProductRestaurantIds(remoteProducts, defaultRestaurantId)));
+      const allFromSupabase = restaurantLoad.source === 'supabase'
+        && catalogLoad.source === 'supabase'
+        && tableLoad.source === 'supabase'
+        && planLoad.source === 'supabase';
+
+      if (allFromSupabase) {
+        const memberRestaurantIds = activeMemberships.map(membership => membership.restaurantId);
+        const visibleRestaurants = authSession
+          ? restaurantLoad.restaurants.filter(restaurant => memberRestaurantIds.includes(restaurant.id))
+          : restaurantLoad.restaurants;
+        const restaurantIds = visibleRestaurants.map(restaurant => restaurant.id);
+        const nextRestaurantId = restaurantIds.includes(activeRestaurantId) ? activeRestaurantId : restaurantIds[0] ?? defaultRestaurantId;
+        const nextPlanId = PlanService.getPlanIdForRestaurant(nextRestaurantId, currentPlanId);
+
+        setMemberships(activeMemberships);
+        setRestaurantConfigs(restaurantLoad.profiles.filter(profile => restaurantIds.includes(profile.restaurantId)));
+        setAllProducts(catalogLoad.products.filter(product => restaurantIds.includes(product.restaurantId)));
+        setTablesByRestaurant(Object.fromEntries(Object.entries(tableLoad.tablesByRestaurant).filter(([restaurantId]) => restaurantIds.includes(restaurantId))));
+        setCart(prev => prev.filter(item => item.product.restaurantId === nextRestaurantId));
+
+        const activeMembership = activeMemberships.find(membership => membership.restaurantId === nextRestaurantId);
+        if (authSession && activeMembership) {
+          setCurrentUserInternal(AuthService.getUserSessionFromMembership(authSession, activeMembership, nextRestaurantId));
+        }
+
+        if (nextRestaurantId !== activeRestaurantId) {
+          setActiveRestaurantIdState(nextRestaurantId);
+          localStorage.setItem('flux_active_restaurant_id', nextRestaurantId);
+        }
+
+        if (nextPlanId !== currentPlanId) {
+          setCurrentPlanIdState(nextPlanId);
+          localStorage.setItem('flux_current_plan_id', nextPlanId);
+        }
+
+        return;
+      }
+
+      setRestaurantConfigs(prev => mergeConfigsByRestaurantId(prev, restaurantLoad.profiles));
+      setAllProducts(prev => mergeByRestaurantIdAndId(prev, CatalogService.ensureProductRestaurantIds(catalogLoad.products, defaultRestaurantId)));
+      setTablesByRestaurant(prev => mergeTablesByRestaurant(prev, tableLoad.tablesByRestaurant));
     }
 
     hydrateSupabaseReads().catch(error => {
-      console.warn('Supabase bootstrap failed. Keeping local data.', error);
+      if (import.meta.env.DEV) console.warn('[FluxMenu data] Supabase bootstrap failed. Keeping local fallback data.', error);
     });
 
     return () => {
       cancelled = true;
     };
-  }, [defaultRestaurantId]);
+  }, [activeRestaurantId, authSession, currentPlanId, defaultRestaurantId]);
 
-  const restaurantConfig = useMemo(() => RestaurantService.getRestaurantConfigForActive(restaurantConfigs, activeRestaurantId), [restaurantConfigs, activeRestaurantId]);
+  useEffect(() => {
+    const nextPlanId = PlanService.getPlanIdForRestaurant(activeRestaurantId, currentPlanId);
+    if (nextPlanId !== currentPlanId) setCurrentPlanId(nextPlanId);
+  }, [activeRestaurantId]);
+
+  const restaurantConfig = useMemo(() => {
+    if (supabaseConfigured) {
+      return restaurantConfigs.find(config => config.restaurantId === activeRestaurantId)
+        ?? restaurantConfigs[0]
+        ?? { restaurantId: activeRestaurantId, name: 'FluxMenu', rating: '', deliveryEstimate: '', address: '', instagram: '' };
+    }
+    return RestaurantService.getRestaurantConfigForActive(restaurantConfigs, activeRestaurantId);
+  }, [activeRestaurantId, restaurantConfigs, supabaseConfigured]);
   const products = useMemo(() => CatalogService.getProductsForRestaurant(allProducts, activeRestaurantId), [allProducts, activeRestaurantId]);
-  const tables = useMemo(() => tablesByRestaurant[activeRestaurantId] ?? TableService.getTables(activeRestaurantId), [tablesByRestaurant, activeRestaurantId]);
+  const productCategories = useMemo(() => CatalogService.getProductCategories(activeRestaurantId), [activeRestaurantId, categoryVersion]);
+  const tables = useMemo(() => tablesByRestaurant[activeRestaurantId] ?? (supabaseConfigured ? [] : TableService.getTables(activeRestaurantId)), [tablesByRestaurant, activeRestaurantId, supabaseConfigured]);
   const orders = useMemo(() => OrderService.getOrdersForRestaurant(allOrders, activeRestaurantId), [allOrders, activeRestaurantId]);
   const paymentLogs = useMemo(() => PaymentService.getPaymentLogsForRestaurant(allPaymentLogs, activeRestaurantId), [allPaymentLogs, activeRestaurantId]);
 
   useEffect(() => localStorage.setItem('flux_current_plan_id', currentPlanId), [currentPlanId]);
   useEffect(() => localStorage.setItem('flux_active_restaurant_id', activeRestaurantId), [activeRestaurantId]);
   useEffect(() => localStorage.setItem('flux_current_user', JSON.stringify(currentUser)), [currentUser]);
-  useEffect(() => localStorage.setItem('flux_restaurant_configs', JSON.stringify(restaurantConfigs)), [restaurantConfigs]);
-  useEffect(() => localStorage.setItem('flux_products', JSON.stringify(allProducts)), [allProducts]);
-  useEffect(() => localStorage.setItem('flux_tables_by_restaurant', JSON.stringify(tablesByRestaurant)), [tablesByRestaurant]);
-  useEffect(() => localStorage.setItem('flux_orders', JSON.stringify(allOrders)), [allOrders]);
-  useEffect(() => localStorage.setItem('flux_cart_' + activeRestaurantId, JSON.stringify(cart)), [cart, activeRestaurantId]);
-  useEffect(() => localStorage.setItem('flux_payment_logs', JSON.stringify(allPaymentLogs)), [allPaymentLogs]);
+  useEffect(() => { if (!supabaseConfigured) localStorage.setItem('flux_restaurant_configs', JSON.stringify(restaurantConfigs)); }, [restaurantConfigs, supabaseConfigured]);
+  useEffect(() => { if (!supabaseConfigured) localStorage.setItem('flux_products', JSON.stringify(allProducts)); }, [allProducts, supabaseConfigured]);
+  useEffect(() => { if (!supabaseConfigured) localStorage.setItem('flux_tables_by_restaurant', JSON.stringify(tablesByRestaurant)); }, [tablesByRestaurant, supabaseConfigured]);
+  useEffect(() => { if (!supabaseConfigured) localStorage.setItem('flux_orders', JSON.stringify(allOrders)); }, [allOrders, supabaseConfigured]);
+  useEffect(() => { if (!supabaseConfigured) localStorage.setItem('flux_cart_' + activeRestaurantId, JSON.stringify(cart)); }, [cart, activeRestaurantId, supabaseConfigured]);
+  useEffect(() => { if (!supabaseConfigured) localStorage.setItem('flux_payment_logs', JSON.stringify(allPaymentLogs)); }, [allPaymentLogs, supabaseConfigured]);
 
   useEffect(() => {
-    const savedTable = localStorage.getItem('flux_current_table_' + activeRestaurantId);
-    setTableNumberState(savedTable || tables[0] || 'Mesa 01');
+    const savedTable = supabaseConfigured ? null : localStorage.getItem('flux_current_table_' + activeRestaurantId);
+    setTableNumberState(savedTable || tables[0] || (supabaseConfigured ? '' : 'Mesa 01'));
     setCart(prev => prev.filter(item => item.product.restaurantId === activeRestaurantId));
     if (currentUser.restaurantId !== activeRestaurantId) setCurrentUserInternal(getDefaultUser(activeRestaurantId));
-  }, [activeRestaurantId]);
+  }, [activeRestaurantId, supabaseConfigured, tables]);
 
   const showUpgradeNotice = (featureName: string) => {
     addToast(featureName + ' está disponível em um plano superior.', 'info');
   };
 
   const setActiveRestaurantId = (restaurantId: RestaurantId) => {
+    if (authSession && !memberships.some(membership => membership.restaurantId === restaurantId)) {
+      addToast('Usuário não está vinculado a este restaurante.', 'warning');
+      return;
+    }
+    const membership = memberships.find(current => current.restaurantId === restaurantId);
+    if (authSession && membership) setCurrentUserInternal(AuthService.getUserSessionFromMembership(authSession, membership, restaurantId));
     setActiveRestaurantIdState(restaurantId);
     localStorage.setItem('flux_active_restaurant_id', restaurantId);
   };
@@ -273,7 +419,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const setTableNumber = (num: string) => {
     setTableNumberState(num);
-    localStorage.setItem('flux_current_table_' + activeRestaurantId, num);
+    if (!supabaseConfigured) localStorage.setItem('flux_current_table_' + activeRestaurantId, num);
   };
 
   const addToCart = (product: Product, quantity: number, observation: string) => {
@@ -352,51 +498,101 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast('Todos os pedidos foram limpos de forma permanente', 'warning');
   };
 
-  const resetInitialOrders = () => {
-    if (!ROLE_PERMISSIONS[currentUser.role].canUpdateKDS) {
-      addToast('Operação não autorizada para seu nível de acesso!', 'warning');
-      return;
-    }
-    setAllOrders(prev => [...prev.filter(order => order.restaurantId !== activeRestaurantId), ...OrderService.getOrders(activeRestaurantId)]);
-    addToast('Pedidos redefinidos para os originais de fábrica', 'success');
-  };
 
-  const createManualOrder = () => {
-    if (!ROLE_PERMISSIONS[currentUser.role].canCreateManualOrders) {
-      addToast('Apenas administradores e gerentes podem registrar novas entradas manuais!', 'warning');
-      return;
-    }
-    const randomOrder = OrderService.createManualOrder(tables, products, activeRestaurantId);
-    if (!randomOrder) return;
-    setAllOrders(prev => [randomOrder, ...prev]);
-    addToast('🔔 Novo pedido ' + randomOrder.id + ' recebido na ' + randomOrder.table, 'info');
-  };
-
-  const updateProduct = (updated: Product) => {
+  const updateProduct = async (updated: Product) => {
     if (!ROLE_PERMISSIONS[currentUser.role].canEditProducts) {
       addToast('Apenas gestores com permissão de edição de catálogo podem alterar produtos!', 'warning');
       return;
     }
-    setAllProducts(prev => CatalogService.updateProduct(prev, { ...updated, restaurantId: activeRestaurantId }));
-    addToast('Produto "' + updated.name + '" atualizado com sucesso!', 'success');
+
+    try {
+      const savedProduct = await CatalogService.saveProduct({ ...updated, restaurantId: activeRestaurantId });
+      setAllProducts(prev => CatalogService.updateProduct(prev, savedProduct));
+      addToast('Produto "' + savedProduct.name + '" salvo no Supabase.', 'success');
+    } catch (error) {
+      console.error(error);
+      addToast('Não foi possível salvar no Supabase. Verifique conexão e permissões.', 'warning');
+    }
   };
 
-  const addProduct = (newProd: Omit<Product, 'id' | 'restaurantId'>) => {
+  const addProduct = async (newProd: Omit<Product, 'id' | 'restaurantId'>) => {
     if (!ROLE_PERMISSIONS[currentUser.role].canEditProducts) {
       addToast('Apenas gestores com permissão de edição de catálogo podem adicionar produtos!', 'warning');
       return;
     }
-    setAllProducts(prev => CatalogService.addProduct(prev, { ...newProd, restaurantId: activeRestaurantId }));
-    addToast('Novo produto "' + newProd.name + '" adicionado ao cardápio!', 'success');
+
+    try {
+      const createdProduct = await CatalogService.createProductInSupabase({ ...newProd, restaurantId: activeRestaurantId });
+      setAllProducts(prev => [...prev, createdProduct]);
+      addToast('Produto "' + createdProduct.name + '" criado no Supabase.', 'success');
+    } catch (error) {
+      console.error(error);
+      addToast(error instanceof Error ? error.message : 'Não foi possível criar o produto.', 'warning');
+    }
   };
 
-  const deleteProduct = (id: string) => {
+  const deleteProduct = async (id: string) => {
     if (!ROLE_PERMISSIONS[currentUser.role].canEditProducts) {
       addToast('Apenas gestores com permissão de edição de catálogo podem remover produtos!', 'warning');
       return;
     }
-    setAllProducts(prev => CatalogService.deleteProduct(prev, id, activeRestaurantId));
-    addToast('Produto removido do cardápio', 'warning');
+
+    try {
+      await CatalogService.deactivateProductInSupabase(id, activeRestaurantId);
+      setAllProducts(prev => CatalogService.deleteProduct(prev, id, activeRestaurantId));
+      addToast('Produto removido do cardápio.', 'warning');
+    } catch (error) {
+      console.error(error);
+      addToast('Não foi possível remover o produto no Supabase.', 'warning');
+    }
+  };
+
+  const addCategory = async (name: string) => {
+    if (!ROLE_PERMISSIONS[currentUser.role].canEditProducts) {
+      addToast('Operação não autorizada para seu nível de acesso!', 'warning');
+      return;
+    }
+
+    try {
+      await CatalogService.createCategoryInSupabase(activeRestaurantId, name);
+      setCategoryVersion(prev => prev + 1);
+      addToast('Categoria criada no Supabase.', 'success');
+    } catch (error) {
+      console.error(error);
+      addToast(error instanceof Error ? error.message : 'Não foi possível criar a categoria.', 'warning');
+    }
+  };
+
+  const updateCategory = async (category: CategoryOption) => {
+    if (!ROLE_PERMISSIONS[currentUser.role].canEditProducts) {
+      addToast('Operação não autorizada para seu nível de acesso!', 'warning');
+      return;
+    }
+
+    try {
+      await CatalogService.updateCategoryInSupabase(category);
+      setCategoryVersion(prev => prev + 1);
+      addToast('Categoria salva no Supabase.', 'success');
+    } catch (error) {
+      console.error(error);
+      addToast(error instanceof Error ? error.message : 'Não foi possível salvar a categoria.', 'warning');
+    }
+  };
+
+  const deleteCategory = async (category: CategoryOption) => {
+    if (!ROLE_PERMISSIONS[currentUser.role].canEditProducts) {
+      addToast('Operação não autorizada para seu nível de acesso!', 'warning');
+      return;
+    }
+
+    try {
+      await CatalogService.deactivateCategoryInSupabase(category);
+      setCategoryVersion(prev => prev + 1);
+      addToast('Categoria removida do cardápio.', 'warning');
+    } catch (error) {
+      console.error(error);
+      addToast('Não foi possível remover a categoria no Supabase.', 'warning');
+    }
   };
 
   const addTable = (num: string) => {
@@ -449,6 +645,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   return (
     <AppContext.Provider value={{
+      authSession,
+      authLoading,
+      authError,
+      isAuthenticated,
+      login,
+      logout,
       currentPlan,
       currentPlanId,
       setCurrentPlanId,
@@ -458,6 +660,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       activeRestaurantId,
       setActiveRestaurantId,
       products,
+      productCategories,
       orders,
       cart,
       tableNumber,
@@ -480,14 +683,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateOrderStatus,
       archiveOrder,
       clearAllOrders,
-      resetInitialOrders,
-      createManualOrder,
       paymentLogs,
       checkoutTable,
       clearPaymentHistory,
       updateProduct,
       addProduct,
       deleteProduct,
+      addCategory,
+      updateCategory,
+      deleteCategory,
       restaurantConfig,
       setRestaurantConfig,
       tables,
