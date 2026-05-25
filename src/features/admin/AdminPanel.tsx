@@ -1,9 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../../store/AppContext';
 import { CategoryOption, Product } from '../../types';
+import * as AnalyticsService from '../../services/analyticsService';
+import { AnalyticsPeriod, DashboardMetrics } from '../../services/analyticsService';
 import { UpgradeNotice } from '../shared/UpgradeNotice';
 import { 
   DollarSign, 
+  Receipt,
   Layers, 
   Eye, 
   EyeOff, 
@@ -26,6 +29,7 @@ export const AdminPanel: React.FC = () => {
   const {
     activeRestaurantId,
     currentPlan,
+    currentUser,
     canUseFeature,
     showUpgradeNotice,
     products,
@@ -51,7 +55,7 @@ export const AdminPanel: React.FC = () => {
   const canRemoveBranding = canUseFeature('remove_fluxmenu_branding');
 
   // Active sub-sections within the Admin
-  const [activeTab, setActiveTab] = useState<'catalog' | 'tables' | 'settings'>('catalog');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'catalog' | 'tables' | 'settings'>('dashboard');
 
   // Edit Product modals states
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -68,19 +72,44 @@ export const AdminPanel: React.FC = () => {
   const [editingCategory, setEditingCategory] = useState<CategoryOption | null>(null);
   const [adminLoading, setAdminLoading] = useState<string | null>(null);
   const [adminError, setAdminError] = useState<string | null>(null);
+  const [analyticsPeriod, setAnalyticsPeriod] = useState<AnalyticsPeriod>('today');
+  const [dashboardMetrics, setDashboardMetrics] = useState<DashboardMetrics | null>(null);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
 
   // New tabular inputs
   const [newTableNameInput, setNewTableNameInput] = useState('');
   const [selectedQRTable, setSelectedQRTable] = useState<string>(tables[0] || 'Mesa 08');
 
-  // Core metrics analytics derived in real time - Cores Fortes
-  const totalRevenue = useMemo(() => {
-    return orders.reduce((sum, order) => sum + (order.status === 'entregue' ? order.total : 0), 0);
-  }, [orders]);
+  useEffect(() => {
+    let cancelled = false;
+    if (!canUseAnalytics || currentUser.role === 'kitchen') {
+      setDashboardMetrics(null);
+      return;
+    }
 
-  const activeOrdersVal = useMemo(() => {
-    return orders.filter(o => o.status !== 'entregue').reduce((sum, o) => sum + o.total, 0);
-  }, [orders]);
+    setDashboardLoading(true);
+    setDashboardError(null);
+    AnalyticsService.loadDashboardMetrics(activeRestaurantId, analyticsPeriod)
+      .then(metrics => {
+        if (!cancelled) setDashboardMetrics(metrics);
+      })
+      .catch(error => {
+        if (!cancelled) setDashboardError(error instanceof Error ? error.message : 'Não foi possível carregar o dashboard.');
+      })
+      .finally(() => {
+        if (!cancelled) setDashboardLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRestaurantId, analyticsPeriod, canUseAnalytics, currentUser.role, orders]);
+
+  const totalRevenue = dashboardMetrics?.revenue ?? 0;
+  const activeOrdersVal = dashboardMetrics
+    ? dashboardMetrics.pendingOrders
+    : orders.filter(o => o.status !== 'entregue').length;
 
   // Handle Catalog Toggles
   const runAdminAction = async (loadingKey: string, action: () => Promise<void>) => {
@@ -197,7 +226,7 @@ export const AdminPanel: React.FC = () => {
               <div>
                 <span className="text-[9px] uppercase font-black text-slate-300 block leading-none">Pedidos em Produção</span>
                 <span className="text-xs font-black font-mono mt-1 block">
-                  {activeOrdersVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  {activeOrdersVal}
                 </span>
               </div>
             </div>
@@ -211,6 +240,19 @@ export const AdminPanel: React.FC = () => {
 
       {/* Primary Sub Tabs Row - Vermelho no Rosa */}
       <div className="bg-white px-6 border-b border-slate-100 flex gap-4 shrink-0 overflow-x-auto">
+        <button
+          onClick={() => setActiveTab('dashboard')}
+          className={`py-4 text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 relative border-b-2 cursor-pointer select-none ${
+            activeTab === 'dashboard'
+              ? 'border-red-600 text-red-650'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+          id="admin-tab-dashboard"
+        >
+          <TrendingUp className="w-3.5 h-3.5" />
+          Dashboard
+        </button>
+
         <button
           onClick={() => setActiveTab('catalog')}
           className={`py-4 text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 relative border-b-2 cursor-pointer select-none ${
@@ -254,7 +296,129 @@ export const AdminPanel: React.FC = () => {
       {/* Main workspace section viewport */}
       <div className="flex-1 overflow-y-auto p-6">
         
-        {/* TAB 1: CARDÁPIO */}
+        {/* TAB 1: DASHBOARD */}
+        {activeTab === 'dashboard' && (
+          <div className="space-y-6">
+            {!canUseAnalytics ? (
+              <button onClick={() => showUpgradeNotice('Analytics')} className="w-full text-left">
+                <UpgradeNotice title="Analytics bloqueado" description="Dashboard operacional e vendas reais estão disponíveis a partir do plano Pro." />
+              </button>
+            ) : currentUser.role === 'kitchen' ? (
+              <div className="bg-white border border-slate-200 rounded-xl p-6 text-xs font-bold text-slate-500">
+                Seu perfil não possui acesso a dados financeiros.
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200/65">
+                  <div>
+                    <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-tight">Operação e Vendas</h3>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Dados reais do Supabase filtrados por restaurante ativo.</p>
+                  </div>
+                  <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+                    {[
+                      ['today', 'Hoje'],
+                      ['7d', '7 dias'],
+                      ['30d', '30 dias']
+                    ].map(([value, label]) => (
+                      <button
+                        key={value}
+                        onClick={() => setAnalyticsPeriod(value as AnalyticsPeriod)}
+                        className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition ${
+                          analyticsPeriod === value ? 'bg-slate-950 text-white' : 'text-slate-500 hover:text-slate-900'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {dashboardLoading && (
+                  <div className="bg-white border border-slate-200 rounded-xl p-6 text-xs font-black text-slate-500 uppercase">
+                    Carregando dashboard...
+                  </div>
+                )}
+
+                {dashboardError && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs font-bold text-red-700">
+                    {dashboardError}
+                  </div>
+                )}
+
+                {!dashboardLoading && !dashboardError && dashboardMetrics && dashboardMetrics.totalOrders === 0 && dashboardMetrics.revenue === 0 && (
+                  <div className="bg-white border border-slate-200 rounded-xl p-8 text-center">
+                    <h4 className="text-sm font-black text-slate-900 uppercase">Sem dados no período</h4>
+                    <p className="text-xs text-slate-500 mt-1">Crie pedidos e feche mesas para alimentar este dashboard.</p>
+                  </div>
+                )}
+
+                {dashboardMetrics && !dashboardError && (
+                  <>
+                    <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+                      {[
+                        ['Faturamento', dashboardMetrics.revenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), DollarSign, 'bg-emerald-600 border-emerald-700'],
+                        ['Pedidos', dashboardMetrics.totalOrders.toString(), Receipt, 'bg-slate-950 border-slate-900'],
+                        ['Ticket Médio', dashboardMetrics.averageTicket.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), Tag, 'bg-amber-600 border-amber-700'],
+                        ['Mesas Abertas', dashboardMetrics.openTables.toString(), Layers, 'bg-red-600 border-red-700']
+                      ].map(([label, value, Icon, color]) => (
+                        <div key={String(label)} className={`${color} p-4 rounded-xl border text-white shadow-sm flex items-center gap-3`}>
+                          <div className="w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <span className="text-[9px] uppercase font-black text-white/75 block">{label}</span>
+                            <span className="text-sm font-black font-mono block truncate">{value}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                      <div className="xl:col-span-2 bg-white rounded-xl border border-slate-200/65 p-5">
+                        <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider mb-4">Produtos Mais Vendidos</h4>
+                        {dashboardMetrics.topProducts.length === 0 ? (
+                          <p className="text-xs text-slate-400 font-bold">Nenhum produto vendido no período.</p>
+                        ) : (
+                          <div className="space-y-3">
+                            {dashboardMetrics.topProducts.map(product => (
+                              <div key={product.productId} className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
+                                <div className="min-w-0">
+                                  <span className="text-xs font-black text-slate-900 block truncate">{product.name}</span>
+                                  <span className="text-[10px] text-slate-500 font-bold">{product.quantity} unidades vendidas</span>
+                                </div>
+                                <span className="text-xs font-black font-mono text-slate-950 shrink-0">
+                                  {product.revenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="bg-white rounded-xl border border-slate-200/65 p-5 space-y-3">
+                        <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">Status Operacional</h4>
+                        {[
+                          ['Em preparo', dashboardMetrics.preparingOrders],
+                          ['Pagos', dashboardMetrics.paidOrders],
+                          ['Pendentes', dashboardMetrics.pendingOrders],
+                          ['Mesas cadastradas', dashboardMetrics.activeTables],
+                          ['Produtos ativos', dashboardMetrics.activeProducts]
+                        ].map(([label, value]) => (
+                          <div key={String(label)} className="flex justify-between items-center text-xs border-b border-slate-100 pb-2 last:border-0">
+                            <span className="font-bold text-slate-500">{label}</span>
+                            <span className="font-black font-mono text-slate-950">{value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* TAB 2: CARDÁPIO */}
         {activeTab === 'catalog' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200/65">
