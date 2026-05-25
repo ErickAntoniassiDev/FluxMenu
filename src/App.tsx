@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { AppProvider, useApp } from './store/AppContext';
 import { Header } from './features/shared/Header';
 import { ClientMenu } from './features/customer/ClientMenu';

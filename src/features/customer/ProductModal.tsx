@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Product } from '../../types';
 import { useApp } from '../../store/AppContext';
-import { X, Plus, Minus, Info, AlertTriangle } from 'lucide-react';
+import { X, Plus, Minus, AlertTriangle } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface ProductModalProps {

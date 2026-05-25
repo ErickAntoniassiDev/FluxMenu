@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../../store/AppContext';
-import { Order, OrderItem, PaymentLog } from '../../types';
+import { Order } from '../../types';
 import { 
   Receipt, 
   DollarSign, 

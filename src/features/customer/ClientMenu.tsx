@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../../store/AppContext';
 import { Product } from '../../types';
-import { ShoppingCart, Search, Utensils, Info, HelpCircle } from 'lucide-react';
+import { ShoppingCart, Search } from 'lucide-react';
 import { ProductModal } from './ProductModal';
 import { CartSidebar } from './CartSidebar';
 import { AnimatePresence, motion } from 'motion/react';

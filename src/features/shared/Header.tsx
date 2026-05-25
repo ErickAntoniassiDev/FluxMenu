@@ -10,8 +10,7 @@ import {
   Receipt, 
   ShieldCheck, 
   ChevronDown, 
-  User, 
-  UserCheck,
+  User,
 } from 'lucide-react';
 import { STAFF_USERS } from '../../utils/rbac';
 

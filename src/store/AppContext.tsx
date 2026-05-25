@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { Product, CartItem, Order, OrderStatus, Toast, OrderItem, RestaurantConfig, PaymentLog, UserRole, UserSession, RolePermissionConfig } from '../types';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { Product, CartItem, Order, OrderStatus, Toast, OrderItem, RestaurantConfig, PaymentLog, UserSession, RolePermissionConfig } from '../types';
 import { MENU_PRODUCTS, INITIAL_ORDERS, RESTAURANT_PROFILE } from '../data';
 import { STAFF_USERS, ROLE_PERMISSIONS } from '../utils/rbac';
 
@@ -132,7 +132,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Restaurant details
   const [restaurantConfig, setRestaurantConfigState] = useState<RestaurantConfig>(() => {
     const saved = localStorage.getItem('flux_restaurant_config');
-    return saved ? JSON.parse(saved) : RESTAURANT_PROFILE;
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) { console.error(e); }
+    }
+    return RESTAURANT_PROFILE;
   });
 
   const setRestaurantConfig = (config: RestaurantConfig) => {
@@ -165,7 +168,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Restaurant Active Tables List
   const [tables, setTables] = useState<string[]>(() => {
     const saved = localStorage.getItem('flux_tables');
-    return saved ? JSON.parse(saved) : ['Mesa 01', 'Mesa 02', 'Mesa 03', 'Mesa 04', 'Mesa 05', 'Mesa 08', 'Mesa 12', 'Mesa 15', 'Mesa VIP'];
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) { console.error(e); }
+    }
+    return ['Mesa 01', 'Mesa 02', 'Mesa 03', 'Mesa 04', 'Mesa 05', 'Mesa 08', 'Mesa 12', 'Mesa 15', 'Mesa VIP'];
   });
 
   useEffect(() => {
@@ -228,6 +234,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const removeFromCart = (index: number) => {
     const item = cart[index];
+    if (!item) return;
     setCart(prev => prev.filter((_, i) => i !== index));
     addToast(`${item.product.name} removido do carrinho`, 'warning');
   };
@@ -235,6 +242,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateCartQuantity = (index: number, delta: number) => {
     setCart(prev => {
       const item = prev[index];
+      if (!item) return prev;
       const newQty = item.quantity + delta;
       if (newQty <= 0) {
         return prev.filter((_, i) => i !== index);
