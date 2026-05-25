@@ -26,7 +26,7 @@ interface AppContextType {
   showUpgradeNotice: (featureName: string) => void;
   activeRestaurantId: RestaurantId;
   setActiveRestaurantId: (restaurantId: RestaurantId) => void;
-  setActiveRestaurantBySlug: (slug: string) => void;
+  setActiveRestaurantBySlug: (slug: string) => boolean;
   products: Product[];
   productCategories: CategoryOption[];
   orders: Order[];
@@ -60,6 +60,8 @@ interface AppContextType {
   addCategory: (name: string) => Promise<void>;
   updateCategory: (category: CategoryOption) => Promise<void>;
   deleteCategory: (category: CategoryOption) => Promise<void>;
+  publicRouteError: string | null;
+  setPublicRouteError: (message: string | null) => void;
   restaurantConfig: RestaurantConfig;
   setRestaurantConfig: (config: RestaurantConfig) => void;
   tables: string[];
@@ -262,6 +264,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [categoryVersion, setCategoryVersion] = useState(0);
+  const [publicRouteError, setPublicRouteError] = useState<string | null>(null);
 
   const [allPaymentLogs, setAllPaymentLogs] = useState<PaymentLog[]>(() => {
     if (supabaseConfigured) return [];
@@ -437,11 +440,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('flux_active_restaurant_id', restaurantId);
   };
 
-  const setActiveRestaurantBySlug = (slug: string) => {
+  const setActiveRestaurantBySlug = (slug: string): boolean => {
     const normalizedSlug = slug.trim().toLowerCase();
     const config = restaurantConfigs.find(restaurant => restaurant.slug === normalizedSlug);
-    if (!config || config.restaurantId === activeRestaurantId) return;
-    setActiveRestaurantId(config.restaurantId);
+    if (!config) return false;
+    if (config.restaurantId !== activeRestaurantId) setActiveRestaurantId(config.restaurantId);
+    return true;
   };
 
   const setActiveMode = (mode: 'client' | 'kitchen' | 'cashier' | 'admin' | 'split') => {
@@ -784,6 +788,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addCategory,
       updateCategory,
       deleteCategory,
+      publicRouteError,
+      setPublicRouteError,
       restaurantConfig,
       setRestaurantConfig,
       tables,

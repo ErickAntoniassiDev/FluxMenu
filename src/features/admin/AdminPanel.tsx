@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import QRCode from 'qrcode';
 import { useApp } from '../../store/AppContext';
 import { CategoryOption, Product } from '../../types';
 import * as AnalyticsService from '../../services/analyticsService';
@@ -22,8 +23,21 @@ import {
   Check, 
   PlusCircle, 
   X,
-  Clock
+  Clock,
+  Copy,
+  Download
 } from 'lucide-react';
+
+
+function toSlug(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
 
 export const AdminPanel: React.FC = () => {
   const {
@@ -80,6 +94,8 @@ export const AdminPanel: React.FC = () => {
   // New tabular inputs
   const [newTableNameInput, setNewTableNameInput] = useState('');
   const [selectedQRTable, setSelectedQRTable] = useState<string>(tables[0] || 'Mesa 08');
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [qrError, setQrError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -110,6 +126,47 @@ export const AdminPanel: React.FC = () => {
   const activeOrdersVal = dashboardMetrics
     ? dashboardMetrics.pendingOrders
     : orders.filter(o => o.status !== 'entregue').length;
+  const selectedTableSlug = toSlug(selectedQRTable);
+  const restaurantSlug = restaurantConfig.slug ?? toSlug(restaurantConfig.name || activeRestaurantId);
+  const publicTableUrl = `${window.location.origin}/r/${restaurantSlug}/${selectedTableSlug}`;
+
+  useEffect(() => {
+    if (tables.length > 0 && !tables.includes(selectedQRTable)) setSelectedQRTable(tables[0]);
+  }, [selectedQRTable, tables]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedQRTable || !restaurantSlug) return;
+    setQrError(null);
+    QRCode.toDataURL(publicTableUrl, {
+      width: 320,
+      margin: 2,
+      color: { dark: '#020617', light: '#ffffff' },
+      errorCorrectionLevel: 'M'
+    })
+      .then(dataUrl => {
+        if (!cancelled) setQrDataUrl(dataUrl);
+      })
+      .catch(error => {
+        if (!cancelled) setQrError(error instanceof Error ? error.message : 'Não foi possível gerar o QR Code.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [publicTableUrl, restaurantSlug, selectedQRTable]);
+
+  const copyPublicTableUrl = async () => {
+    await navigator.clipboard.writeText(publicTableUrl);
+    setAdminError(null);
+  };
+
+  const downloadQrCode = () => {
+    if (!qrDataUrl) return;
+    const link = document.createElement('a');
+    link.href = qrDataUrl;
+    link.download = `fluxmenu-${restaurantSlug}-${selectedTableSlug}.png`;
+    link.click();
+  };
 
   // Handle Catalog Toggles
   const runAdminAction = async (loadingKey: string, action: () => Promise<void>) => {
@@ -639,13 +696,23 @@ export const AdminPanel: React.FC = () => {
                 {tables.map(tab => (
                   <div key={tab} className="py-2.5 flex items-center justify-between text-xs font-bold text-slate-850">
                     <span className="uppercase text-slate-900 font-extrabold font-display">{tab}</span>
-                    <button
-                      onClick={() => deleteTable(tab)}
-                      className="text-slate-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition cursor-pointer"
-                      id={`delete-table-${tab}`}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setSelectedQRTable(tab)}
+                        className="text-slate-400 hover:text-slate-950 p-1 rounded hover:bg-slate-100 transition cursor-pointer"
+                        id={`generate-qr-${tab}`}
+                        title="Gerar QR Code"
+                      >
+                        <QrCode className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => deleteTable(tab)}
+                        className="text-slate-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition cursor-pointer"
+                        id={`delete-table-${tab}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -680,13 +747,13 @@ export const AdminPanel: React.FC = () => {
                   <div className="p-3.5 rounded-xl bg-slate-100 border text-[10.5px] leading-relaxed text-slate-500 space-y-2 font-semibold">
                     <p>🔗 <strong>Link de acesso por QR:</strong></p>
                     <a
-                      href={`${window.location.origin}/#/client?mesa=${selectedQRTable.replace(' ', '')}`}
+                      href={publicTableUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-[9.5px] block p-2 bg-white hover:bg-slate-50 rounded border select-all truncate font-mono text-red-650 font-black uppercase underline decoration-red-600/30 transition hover:text-red-750 cursor-pointer"
                       title="Clique para abrir o cardápio desta mesa em uma nova aba"
                     >
-                      {window.location.origin}/#/client?mesa={selectedQRTable.replace(' ', '')}
+                      {publicTableUrl}
                     </a>
                     <p className="pt-1 border-t text-[10px] border-slate-200">Clique no link acima para abrir o autoatendimento pré-configurado para esta mesa em uma nova aba do navegador.</p>
                   </div>
@@ -703,24 +770,37 @@ export const AdminPanel: React.FC = () => {
 
                   {/* QR code preview */}
                   <div className="p-4 bg-white rounded-xl shadow-md flex items-center justify-center shrink-0">
-                    <div className="w-28 h-28 border border-slate-100 flex items-center justify-center relative">
-                      <QrCode className="w-24 h-24 text-slate-900" />
-                      <div className="w-6 h-6 rounded bg-slate-950 border border-slate-800 flex items-center justify-center absolute text-red-500 text-[6px] font-black font-mono">
-                        FM
+                    {qrDataUrl ? (
+                      <img src={qrDataUrl} alt={`QR Code ${selectedQRTable}`} className="w-28 h-28 object-contain" />
+                    ) : (
+                      <div className="w-28 h-28 border border-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400 uppercase">
+                        Gerando
                       </div>
-                    </div>
+                    )}
                   </div>
 
-                  <span className="text-[9.5px] text-slate-400 leading-relaxed font-bold mt-3 max-w-[150px]">
-                    Escaneie para realizar o pedido direto do celular
+                  {qrError && <span className="text-[9.5px] text-red-400 leading-relaxed font-bold mt-3 max-w-[180px]">{qrError}</span>}
+                  <span className="text-[9.5px] text-slate-400 leading-relaxed font-bold mt-3 max-w-[180px] break-all">
+                    {publicTableUrl}
                   </span>
 
-                  <button
-                    onClick={() => alert(`Preparando impressão térmica de adesivo de mesa para o ${selectedQRTable}...`)}
-                    className="w-full h-9 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[10px] font-black uppercase transition mt-4 flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    Imprimir Adesivo
-                  </button>
+                  <div className="grid grid-cols-2 gap-2 w-full mt-4">
+                    <button
+                      onClick={() => void copyPublicTableUrl()}
+                      className="h-9 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[10px] font-black uppercase transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      Copiar
+                    </button>
+                    <button
+                      onClick={downloadQrCode}
+                      disabled={!qrDataUrl}
+                      className="h-9 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white rounded-lg text-[10px] font-black uppercase transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      PNG
+                    </button>
+                  </div>
                 </div>
 
               </div>

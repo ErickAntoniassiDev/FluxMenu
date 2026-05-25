@@ -21,32 +21,58 @@ function toSlug(value: string): string {
 }
 
 const RouteSynchronizer: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { tableNumber, setTableNumber, addToast, tables, setActiveRestaurantBySlug } = useApp();
+  const { tableNumber, setTableNumber, addToast, tables, setActiveRestaurantBySlug, setPublicRouteError } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Parse public restaurant/table URL params: #/client/gusto-charcoal/mesa-01 or #/client?restaurant=gusto-charcoal&mesa=mesa-01
+  // Parse public restaurant/table URL params: /r/gusto-charcoal/mesa-01, #/r/gusto-charcoal/mesa-01 or #/client?restaurant=gusto-charcoal&mesa=mesa-01
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const pathParts = location.pathname.split('/').filter(Boolean);
-    const restaurantSlug = params.get('restaurant') ?? (pathParts[0] === 'client' ? pathParts[1] : null);
-    const tableParam = params.get('mesa') ?? params.get('table') ?? (pathParts[0] === 'client' ? pathParts[2] : null);
+    const routerParts = location.pathname.split('/').filter(Boolean);
+    const browserParts = window.location.pathname.split('/').filter(Boolean);
+    const routeParts = browserParts[0] === 'r' ? browserParts : routerParts;
+    const isPublicRestaurantRoute = routeParts[0] === 'r';
 
-    if (restaurantSlug) setActiveRestaurantBySlug(decodeURIComponent(restaurantSlug));
+    const restaurantSlug = params.get('restaurant')
+      ?? (isPublicRestaurantRoute ? routeParts[1] : null)
+      ?? (routerParts[0] === 'client' ? routerParts[1] : null);
+    const tableParam = params.get('mesa')
+      ?? params.get('table')
+      ?? (isPublicRestaurantRoute ? routeParts[2] : null)
+      ?? (routerParts[0] === 'client' ? routerParts[2] : null);
+
+    if (!restaurantSlug && !tableParam) {
+      setPublicRouteError(null);
+      return;
+    }
+
+    if (restaurantSlug) {
+      const foundRestaurant = setActiveRestaurantBySlug(decodeURIComponent(restaurantSlug));
+      if (!foundRestaurant) {
+        setPublicRouteError('Restaurante não encontrado ou indisponível.');
+        return;
+      }
+    }
 
     if (tableParam) {
       const rawTable = decodeURIComponent(tableParam);
-      let formattedTable = tables.find(table => toSlug(table) === toSlug(rawTable)) ?? rawTable;
-      if (formattedTable.startsWith('Mesa') && formattedTable.length > 4 && !formattedTable.includes(' ')) {
-        const numPart = formattedTable.substring(4);
+      let formattedTable = tables.find(table => toSlug(table) === toSlug(rawTable)) ?? '';
+      if (!formattedTable && rawTable.startsWith('Mesa') && rawTable.length > 4 && !rawTable.includes(' ')) {
+        const numPart = rawTable.substring(4);
         if (/^\d+$/.test(numPart)) formattedTable = `Mesa ${numPart}`;
       }
-      if (formattedTable && formattedTable !== tableNumber) {
+      if (!formattedTable) {
+        setPublicRouteError('Mesa não encontrada ou inativa.');
+        return;
+      }
+      if (formattedTable !== tableNumber) {
         setTableNumber(formattedTable);
         addToast(`Mesa de autoatendimento identificada via URL: ${formattedTable}`, 'info');
       }
     }
-  }, [location.pathname, location.search, tableNumber, setTableNumber, addToast, tables, setActiveRestaurantBySlug]);
+
+    setPublicRouteError(null);
+  }, [location.pathname, location.search, tableNumber, setTableNumber, addToast, tables, setActiveRestaurantBySlug, setPublicRouteError]);
 
   // Sync index route "/" -> "/client"
   useEffect(() => {

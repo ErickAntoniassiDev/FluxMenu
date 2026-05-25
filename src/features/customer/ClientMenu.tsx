@@ -8,7 +8,7 @@ import { CartSidebar } from './CartSidebar';
 import { AnimatePresence, motion } from 'motion/react';
 
 export const ClientMenu: React.FC = () => {
-  const { activeRestaurantId, canUseFeature, products, cart, tableNumber } = useApp();
+  const { activeRestaurantId, canUseFeature, products, cart, tableNumber, publicRouteError } = useApp();
   const categories = getMenuCategories(activeRestaurantId);
   const canRemoveBranding = canUseFeature('remove_fluxmenu_branding');
 
@@ -32,6 +32,17 @@ export const ClientMenu: React.FC = () => {
   // Cart indicators
   const cartItemCount = cart.reduce((acc, item) => acc + item.quantity, 0);
   const cartTotalVal = cart.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
+
+  if (publicRouteError) {
+    return (
+      <div className="h-full bg-slate-50 flex items-center justify-center p-6" id="client-public-route-error">
+        <div className="bg-white border border-red-200 rounded-2xl p-6 max-w-sm text-center shadow-xs">
+          <h2 className="text-sm font-black text-slate-950 uppercase">Cardápio indisponível</h2>
+          <p className="text-xs text-slate-500 mt-2 font-semibold">{publicRouteError}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full bg-slate-50/50 animate-fade-in relative" id="client-menu-container">
