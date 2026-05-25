@@ -55,3 +55,25 @@ export function addTable(tables: string[], table: string): string[] {
 export function deleteTable(tables: string[], table: string): string[] {
   return tables.filter(current => current !== table);
 }
+
+export async function getTableRecordsForRestaurant(restaurantId: RestaurantId) {
+  return TableSupabaseRepository.findTablesForRestaurant(restaurantId);
+}
+
+export async function createTableInSupabase(restaurantId: RestaurantId, label: string) {
+  const table = await TableSupabaseRepository.createTable(restaurantId, label);
+  logDataSource('restaurant_table create', 'supabase', { restaurantId, tableId: table.id });
+  return table;
+}
+
+export async function updateTableInSupabase(restaurantId: RestaurantId, tableId: string, label: string) {
+  const table = await TableSupabaseRepository.updateTable(restaurantId, tableId, label);
+  logDataSource('restaurant_table update', 'supabase', { restaurantId, tableId });
+  return table;
+}
+
+export async function setTableActiveInSupabase(restaurantId: RestaurantId, tableId: string, active: boolean) {
+  const table = await TableSupabaseRepository.setTableActive(restaurantId, tableId, active);
+  logDataSource('restaurant_table active update', 'supabase', { restaurantId, tableId, active });
+  return table;
+}

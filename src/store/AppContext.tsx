@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { Product, CartItem, Order, OrderStatus, Toast, RestaurantConfig, PaymentLog, UserSession, RolePermissionConfig, RestaurantId, SaaSFeature, SaaSLimit, SaaSPlan, SaaSPlanId, CategoryOption } from '../types';
+import { Product, CartItem, Order, OrderStatus, Toast, RestaurantConfig, PaymentLog, UserSession, RolePermissionConfig, RestaurantId, SaaSFeature, SaaSLimit, SaaSPlan, SaaSPlanId, CategoryOption, BillingPayment, RestaurantSubscriptionStatus } from '../types';
 import { ROLE_PERMISSIONS } from '../utils/rbac';
 import * as CatalogService from '../services/catalogService';
 import * as OrderService from '../services/orderService';
@@ -9,6 +9,7 @@ import * as TableService from '../services/tableService';
 import { getDefaultUser } from '../services/userService';
 import * as PlanService from '../services/planService';
 import * as AuthService from '../services/authService';
+import * as BillingService from '../services/billingService';
 import { isSupabaseConfigured, SupabaseAuthSession } from '../lib/supabase/client';
 
 interface AppContextType {
@@ -16,12 +17,17 @@ interface AppContextType {
   authLoading: boolean;
   authError: string | null;
   isAuthenticated: boolean;
+  hasActiveRestaurant: boolean;
+  createRestaurantForCurrentUser: (restaurantName: string) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   registerRestaurant: (email: string, password: string, restaurantName: string) => Promise<void>;
   resendConfirmationEmail: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   currentPlan: SaaSPlan;
   currentPlanId: SaaSPlanId;
+  currentSubscription: RestaurantSubscriptionStatus | null;
+  billingPayments: BillingPayment[];
+  refreshBilling: () => Promise<void>;
   setCurrentPlanId: (planId: SaaSPlanId) => void;
   canUseFeature: (feature: SaaSFeature) => boolean;
   getPlanLimit: (limit: SaaSLimit) => number;
@@ -65,10 +71,11 @@ interface AppContextType {
   publicRouteError: string | null;
   setPublicRouteError: (message: string | null) => void;
   restaurantConfig: RestaurantConfig;
-  setRestaurantConfig: (config: RestaurantConfig) => void;
+  setRestaurantConfig: (config: RestaurantConfig) => Promise<void>;
   tables: string[];
-  addTable: (num: string) => void;
-  deleteTable: (num: string) => void;
+  addTable: (num: string) => Promise<void>;
+  updateTable: (tableId: string, label: string) => Promise<void>;
+  deleteTable: (num: string, tableId?: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -122,19 +129,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [authError, setAuthError] = useState<string | null>(null);
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const isAuthenticated = !!authSession;
+  const hasActiveRestaurant = memberships.length > 0;
   const [currentPlanId, setCurrentPlanIdState] = useState<SaaSPlanId>(() => {
+    if (supabaseConfigured) return PlanService.getDefaultPlanId();
     const saved = localStorage.getItem('flux_current_plan_id') as SaaSPlanId | null;
     return saved || PlanService.getDefaultPlanId();
   });
   const currentPlan = PlanService.getPlan(currentPlanId);
+  const [currentSubscription, setCurrentSubscription] = useState<RestaurantSubscriptionStatus | null>(null);
+  const [billingPayments, setBillingPayments] = useState<BillingPayment[]>([]);
 
   const setCurrentPlanId = (planId: SaaSPlanId) => {
+    if (supabaseConfigured && currentSubscription && currentSubscription.planId !== planId) {
+      addToast('Alteração manual de plano bloqueada. Use a tela de assinatura.', 'warning');
+      return;
+    }
     setCurrentPlanIdState(planId);
-    localStorage.setItem('flux_current_plan_id', planId);
+    if (!supabaseConfigured) localStorage.setItem('flux_current_plan_id', planId);
   };
 
-  const canUseFeature = (feature: SaaSFeature) => PlanService.canUseFeature(currentPlanId, feature);
-  const getPlanLimit = (limit: SaaSLimit) => PlanService.getPlanLimit(currentPlanId, limit);
+  const hasBillingEntitlement = !supabaseConfigured || currentSubscription?.status === 'trialing' || currentSubscription?.status === 'active';
+  const canUseFeature = (feature: SaaSFeature) => hasBillingEntitlement && PlanService.canUseFeature(currentPlanId, feature);
+  const getPlanLimit = (limit: SaaSLimit) => hasBillingEntitlement ? PlanService.getPlanLimit(currentPlanId, limit) : PlanService.getPlanLimit(PlanService.getDefaultPlanId(), limit);
 
   const [activeRestaurantId, setActiveRestaurantIdState] = useState<RestaurantId>(() => {
     return supabaseConfigured ? defaultRestaurantId : localStorage.getItem('flux_active_restaurant_id') || defaultRestaurantId;
@@ -167,7 +183,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           addToast('Restaurante criado com sucesso. Bem-vindo ao FluxMenu!', 'success');
         }
       }
-      if (activeMemberships.length === 0) throw new Error('Usuário não está vinculado a nenhum restaurante ativo.');
+      if (activeMemberships.length === 0) {
+        setAuthSession(session);
+        setMemberships([]);
+        setActiveRestaurantIdState(defaultRestaurantId);
+        setCurrentUserInternal(getDefaultUser(defaultRestaurantId));
+        localStorage.removeItem('flux_active_restaurant_id');
+        return;
+      }
       const firstMembership = activeMemberships[0];
       setAuthSession(session);
       setMemberships(activeMemberships);
@@ -213,6 +236,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+
+  const createRestaurantForCurrentUser = async (restaurantName: string) => {
+    if (!authSession) throw new Error('Sessão autenticada obrigatória.');
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      AuthService.savePendingOnboarding({ email: authSession.user.email, restaurantName });
+      const onboarding = await AuthService.completePendingOnboarding(authSession);
+      if (!onboarding) throw new Error('Não foi possível concluir o onboarding.');
+      const membership: Membership = {
+        id: 'onboarding-' + onboarding.restaurantId,
+        restaurantId: onboarding.restaurantId,
+        profileId: authSession.user.id,
+        role: onboarding.memberRole,
+        active: true
+      };
+      setMemberships([membership]);
+      setActiveRestaurantIdState(onboarding.restaurantId);
+      setCurrentUserInternal(AuthService.getUserSessionFromMembership(authSession, membership, onboarding.restaurantId));
+      setCurrentPlanIdState(onboarding.planId);
+      localStorage.setItem('flux_active_restaurant_id', onboarding.restaurantId);
+      localStorage.setItem('flux_current_plan_id', onboarding.planId);
+      addToast('Restaurante criado com sucesso. Bem-vindo ao FluxMenu!', 'success');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Falha ao criar restaurante.';
+      setAuthError(message);
+      throw error;
+    } finally {
+      setAuthLoading(false);
+    }
+  };
 
   const resendConfirmationEmail = async (email: string) => {
     setAuthLoading(true);
@@ -394,6 +448,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           localStorage.setItem('flux_active_restaurant_id', nextRestaurantId);
         }
 
+        const nextSubscription = PlanService.getSubscriptionForRestaurant(nextRestaurantId);
+        setCurrentSubscription(nextSubscription ? {
+          id: nextSubscription.id,
+          restaurantId: nextSubscription.restaurantId,
+          planId: nextSubscription.planId,
+          status: nextSubscription.status,
+          billingStatus: nextSubscription.billingStatus,
+          checkoutUrl: nextSubscription.checkoutUrl,
+          trialEndsAt: nextSubscription.trialEndsAt,
+          currentPeriodEnd: nextSubscription.currentPeriodEnd,
+          cancelAtPeriodEnd: nextSubscription.cancelAtPeriodEnd
+        } : null);
+
         if (nextPlanId !== currentPlanId) {
           setCurrentPlanIdState(nextPlanId);
           localStorage.setItem('flux_current_plan_id', nextPlanId);
@@ -416,9 +483,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [activeRestaurantId, authSession, currentPlanId, defaultRestaurantId]);
 
+  const refreshBilling = async () => {
+    if (!authSession || !activeRestaurantId) return;
+    const billing = await BillingService.loadBillingStatus(activeRestaurantId);
+    setCurrentSubscription(billing.subscription);
+    setBillingPayments(billing.payments);
+    if (billing.subscription?.planId && billing.subscription.planId !== currentPlanId) setCurrentPlanIdState(billing.subscription.planId);
+  };
+
   useEffect(() => {
     const nextPlanId = PlanService.getPlanIdForRestaurant(activeRestaurantId, currentPlanId);
-    if (nextPlanId !== currentPlanId) setCurrentPlanId(nextPlanId);
+    const nextSubscription = PlanService.getSubscriptionForRestaurant(activeRestaurantId);
+    setCurrentSubscription(nextSubscription ? {
+      id: nextSubscription.id,
+      restaurantId: nextSubscription.restaurantId,
+      planId: nextSubscription.planId,
+      status: nextSubscription.status,
+      billingStatus: nextSubscription.billingStatus,
+      checkoutUrl: nextSubscription.checkoutUrl,
+      trialEndsAt: nextSubscription.trialEndsAt,
+      currentPeriodEnd: nextSubscription.currentPeriodEnd,
+      cancelAtPeriodEnd: nextSubscription.cancelAtPeriodEnd
+    } : null);
+    if (nextPlanId !== currentPlanId) setCurrentPlanIdState(nextPlanId);
   }, [activeRestaurantId]);
 
   const restaurantConfig = useMemo(() => {
@@ -435,7 +522,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const orders = useMemo(() => OrderService.getOrdersForRestaurant(allOrders, activeRestaurantId), [allOrders, activeRestaurantId]);
   const paymentLogs = useMemo(() => PaymentService.getPaymentLogsForRestaurant(allPaymentLogs, activeRestaurantId), [allPaymentLogs, activeRestaurantId]);
 
-  useEffect(() => localStorage.setItem('flux_current_plan_id', currentPlanId), [currentPlanId]);
+  useEffect(() => { if (!supabaseConfigured) localStorage.setItem('flux_current_plan_id', currentPlanId); }, [currentPlanId, supabaseConfigured]);
   useEffect(() => localStorage.setItem('flux_active_restaurant_id', activeRestaurantId), [activeRestaurantId]);
   useEffect(() => localStorage.setItem('flux_current_user', JSON.stringify(currentUser)), [currentUser]);
   useEffect(() => { if (!supabaseConfigured) localStorage.setItem('flux_restaurant_configs', JSON.stringify(restaurantConfigs)); }, [restaurantConfigs, supabaseConfigured]);
@@ -535,12 +622,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const hasPermission = (action: keyof Omit<RolePermissionConfig, 'allowedModes'>) => !!ROLE_PERMISSIONS[currentUser.role][action];
   const isModeAllowed = (mode: 'client' | 'kitchen' | 'cashier' | 'admin' | 'split') => ROLE_PERMISSIONS[currentUser.role].allowedModes.includes(mode);
 
-  const setRestaurantConfig = (config: RestaurantConfig) => {
+  const setRestaurantConfig = async (config: RestaurantConfig) => {
     if (!ROLE_PERMISSIONS[currentUser.role].canConfigureRestaurant) {
       addToast('Operação não autorizada para seu nível de acesso!', 'warning');
       return;
     }
-    setRestaurantConfigs(prev => RestaurantService.updateRestaurantConfig(prev, { ...config, restaurantId: activeRestaurantId }));
+
+    const nextConfig = { ...config, restaurantId: activeRestaurantId };
+    setRestaurantConfigs(prev => RestaurantService.updateRestaurantConfig(prev, nextConfig));
+
+    if (supabaseConfigured) {
+      try {
+        const savedConfig = await RestaurantService.saveRestaurantConfig(nextConfig);
+        setRestaurantConfigs(prev => RestaurantService.updateRestaurantConfig(prev, savedConfig));
+        addToast('Informações da loja salvas no Supabase.', 'success');
+      } catch (error) {
+        console.error(error);
+        addToast('Não foi possível salvar as informações da loja no Supabase.', 'warning');
+        throw error;
+      }
+    }
   };
 
   const setTableNumber = (num: string) => {
@@ -744,7 +845,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const addTable = (num: string) => {
+  const addTable = async (num: string) => {
     if (!ROLE_PERMISSIONS[currentUser.role].canManageTables) {
       addToast('Operação de mesas não autorizada para seu nível de acesso!', 'warning');
       return;
@@ -753,14 +854,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast('Esta mesa já existe!', 'warning');
       return;
     }
+
+    if (supabaseConfigured) {
+      await TableService.createTableInSupabase(activeRestaurantId, num);
+    }
+
     setTablesByRestaurant(prev => ({ ...prev, [activeRestaurantId]: TableService.addTable(prev[activeRestaurantId] ?? [], num) }));
     addToast(num + ' cadastrada com sucesso', 'success');
   };
 
-  const deleteTable = (num: string) => {
+  const updateTable = async (tableId: string, label: string) => {
     if (!ROLE_PERMISSIONS[currentUser.role].canManageTables) {
       addToast('Operação de mesas não autorizada para seu nível de acesso!', 'warning');
       return;
+    }
+    if (supabaseConfigured) {
+      await TableService.updateTableInSupabase(activeRestaurantId, tableId, label);
+    }
+    const currentLabel = tables.find(table => table === label) ? label : '';
+    setTablesByRestaurant(prev => ({
+      ...prev,
+      [activeRestaurantId]: (prev[activeRestaurantId] ?? []).map(table => table === currentLabel ? label : table)
+    }));
+    addToast('Mesa atualizada com sucesso', 'success');
+  };
+
+  const deleteTable = async (num: string, tableId?: string) => {
+    if (!ROLE_PERMISSIONS[currentUser.role].canManageTables) {
+      addToast('Operação de mesas não autorizada para seu nível de acesso!', 'warning');
+      return;
+    }
+    if (supabaseConfigured && tableId) {
+      await TableService.setTableActiveInSupabase(activeRestaurantId, tableId, false);
     }
     setTablesByRestaurant(prev => ({ ...prev, [activeRestaurantId]: TableService.deleteTable(prev[activeRestaurantId] ?? [], num) }));
     addToast(num + ' removida do sistema', 'warning');
@@ -807,12 +932,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       authLoading,
       authError,
       isAuthenticated,
+      hasActiveRestaurant,
+      createRestaurantForCurrentUser,
       login,
       registerRestaurant,
       resendConfirmationEmail,
       logout,
       currentPlan,
       currentPlanId,
+      currentSubscription,
+      billingPayments,
+      refreshBilling,
       setCurrentPlanId,
       canUseFeature,
       getPlanLimit,
@@ -859,6 +989,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setRestaurantConfig,
       tables,
       addTable,
+      updateTable,
       deleteTable
     }}>
       {children}

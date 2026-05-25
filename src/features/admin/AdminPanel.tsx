@@ -1,10 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { useApp } from '../../store/AppContext';
-import { CategoryOption, Product } from '../../types';
+import { CategoryOption, Product, RestaurantConfig, RestaurantTable, UserRole } from '../../types';
 import * as AnalyticsService from '../../services/analyticsService';
+import * as TableService from '../../services/tableService';
+import * as StaffService from '../../services/staffService';
+import * as AssetService from '../../services/assetService';
+import * as BillingService from '../../services/billingService';
 import { AnalyticsPeriod, DashboardMetrics } from '../../services/analyticsService';
 import { UpgradeNotice } from '../shared/UpgradeNotice';
+import { SAAS_PLANS } from '../../config/plans';
 import { 
   DollarSign, 
   Receipt,
@@ -25,7 +30,14 @@ import {
   X,
   Clock,
   Copy,
-  Download
+  Download,
+  Users,
+  UserPlus,
+  Palette,
+  Image as ImageIcon,
+  CreditCard,
+  Save,
+  Power
 } from 'lucide-react';
 
 
@@ -43,6 +55,10 @@ export const AdminPanel: React.FC = () => {
   const {
     activeRestaurantId,
     currentPlan,
+    currentPlanId,
+    currentSubscription,
+    billingPayments,
+    refreshBilling,
     currentUser,
     canUseFeature,
     showUpgradeNotice,
@@ -59,7 +75,9 @@ export const AdminPanel: React.FC = () => {
     setRestaurantConfig,
     tables,
     addTable,
-    deleteTable
+    updateTable,
+    deleteTable,
+    hasPermission
   } = useApp();
 
   const canUseAnalytics = canUseFeature('analytics');
@@ -69,7 +87,7 @@ export const AdminPanel: React.FC = () => {
   const canRemoveBranding = canUseFeature('remove_fluxmenu_branding');
 
   // Active sub-sections within the Admin
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'catalog' | 'tables' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'catalog' | 'tables' | 'staff' | 'subscription' | 'settings'>('dashboard');
 
   // Edit Product modals states
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -96,6 +114,76 @@ export const AdminPanel: React.FC = () => {
   const [selectedQRTable, setSelectedQRTable] = useState<string>(tables[0] || 'Mesa 08');
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [qrError, setQrError] = useState<string | null>(null);
+  const [tableRecords, setTableRecords] = useState<RestaurantTable[]>([]);
+  const [editingTable, setEditingTable] = useState<RestaurantTable | null>(null);
+  const [staffMembers, setStaffMembers] = useState<StaffService.StaffMember[]>([]);
+  const [staffInvitations, setStaffInvitations] = useState<StaffService.StaffInvitation[]>([]);
+  const [staffLoading, setStaffLoading] = useState(false);
+  const [staffError, setStaffError] = useState<string | null>(null);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<UserRole>('waiter');
+  const [settingsDraft, setSettingsDraft] = useState<RestaurantConfig>(restaurantConfig);
+  const [settingsLoading, setSettingsLoading] = useState<string | null>(null);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [billingLoading, setBillingLoading] = useState<string | null>(null);
+  const [billingError, setBillingError] = useState<string | null>(null);
+
+  const canManageRestaurant = hasPermission('canConfigureRestaurant');
+  const canManageTables = hasPermission('canManageTables');
+  const canManageStaff = currentUser.role === 'owner' || currentUser.role === 'manager';
+  const assignableRoles = StaffService.getAssignableRoles(currentUser.role);
+  const weekDays = [
+    ['mon', 'Segunda'],
+    ['tue', 'Terça'],
+    ['wed', 'Quarta'],
+    ['thu', 'Quinta'],
+    ['fri', 'Sexta'],
+    ['sat', 'Sábado'],
+    ['sun', 'Domingo']
+  ] as const;
+
+  useEffect(() => {
+    setSettingsDraft(restaurantConfig);
+  }, [restaurantConfig]);
+
+  const reloadTables = async () => {
+    try {
+      const records = await TableService.getTableRecordsForRestaurant(activeRestaurantId);
+      setTableRecords(records);
+    } catch (error) {
+      setAdminError(error instanceof Error ? error.message : 'Não foi possível carregar mesas.');
+    }
+  };
+
+  const reloadStaff = async () => {
+    if (!canManageStaff) return;
+    setStaffLoading(true);
+    setStaffError(null);
+    try {
+      const [members, invitations] = await Promise.all([
+        StaffService.loadStaff(activeRestaurantId),
+        StaffService.loadInvitations(activeRestaurantId)
+      ]);
+      setStaffMembers(members);
+      setStaffInvitations(invitations);
+    } catch (error) {
+      setStaffError(error instanceof Error ? error.message : 'Não foi possível carregar funcionários.');
+    } finally {
+      setStaffLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void reloadTables();
+  }, [activeRestaurantId]);
+
+  useEffect(() => {
+    if (currentUser.role === 'owner') void refreshBilling().catch(error => setBillingError(error instanceof Error ? error.message : 'Não foi possível carregar assinatura.'));
+  }, [activeRestaurantId, currentUser.role]);
+
+  useEffect(() => {
+    void reloadStaff();
+  }, [activeRestaurantId, canManageStaff]);
 
   useEffect(() => {
     let cancelled = false;
@@ -239,11 +327,136 @@ export const AdminPanel: React.FC = () => {
     });
   };
 
-  const handleAddTableSubmit = (e: React.FormEvent) => {
+  const handleAddTableSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTableNameInput.trim()) return;
-    addTable(newTableNameInput.trim());
-    setNewTableNameInput('');
+    await runAdminAction('add-table', async () => {
+      await addTable(newTableNameInput.trim());
+      await reloadTables();
+      setNewTableNameInput('');
+    });
+  };
+
+  const handleUpdateTableSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTable?.id || !editingTable.label.trim()) return;
+    await runAdminAction('edit-table-' + editingTable.id, async () => {
+      await updateTable(editingTable.id!, editingTable.label.trim());
+      await reloadTables();
+      setEditingTable(null);
+    });
+  };
+
+  const handleDeleteTable = async (table: RestaurantTable) => {
+    await runAdminAction('delete-table-' + (table.id ?? table.label), async () => {
+      await deleteTable(table.label, table.id);
+      await reloadTables();
+    });
+  };
+
+  const handleInviteStaff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteEmail.trim()) return setStaffError('Informe o email do funcionário.');
+    setStaffLoading(true);
+    setStaffError(null);
+    try {
+      await StaffService.inviteStaff(activeRestaurantId, inviteEmail, inviteRole, currentUser.role);
+      setInviteEmail('');
+      setInviteRole('waiter');
+      await reloadStaff();
+    } catch (error) {
+      setStaffError(error instanceof Error ? error.message : 'Não foi possível convidar funcionário.');
+    } finally {
+      setStaffLoading(false);
+    }
+  };
+
+  const handleStaffRoleChange = async (member: StaffService.StaffMember, role: UserRole) => {
+    if (member.role === 'owner') return setStaffError('Owner não pode ser alterado por esta tela.');
+    setStaffLoading(true);
+    setStaffError(null);
+    try {
+      await StaffService.updateStaffRole(activeRestaurantId, member.id, role, currentUser.role);
+      await reloadStaff();
+    } catch (error) {
+      setStaffError(error instanceof Error ? error.message : 'Não foi possível alterar permissão.');
+    } finally {
+      setStaffLoading(false);
+    }
+  };
+
+  const handleStaffActiveChange = async (member: StaffService.StaffMember, active: boolean) => {
+    if (member.role === 'owner') return setStaffError('Owner não pode ser desativado por esta tela.');
+    setStaffLoading(true);
+    setStaffError(null);
+    try {
+      await StaffService.setStaffActive(activeRestaurantId, member.id, active, currentUser.role, member.role);
+      await reloadStaff();
+    } catch (error) {
+      setStaffError(error instanceof Error ? error.message : 'Não foi possível atualizar funcionário.');
+    } finally {
+      setStaffLoading(false);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    setSettingsError(null);
+    setSettingsLoading('settings');
+    try {
+      await setRestaurantConfig(settingsDraft);
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : 'Não foi possível salvar configurações.');
+    } finally {
+      setSettingsLoading(null);
+    }
+  };
+
+  const handleAssetUpload = async (kind: 'logo' | 'banner', file: File | null) => {
+    if (!file) return;
+    setSettingsError(null);
+    setSettingsLoading(kind);
+    try {
+      const url = await AssetService.uploadRestaurantAsset(activeRestaurantId, kind, file);
+      setSettingsDraft(prev => ({ ...prev, [kind === 'logo' ? 'logoUrl' : 'bannerUrl']: url }));
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : 'Não foi possível enviar imagem.');
+    } finally {
+      setSettingsLoading(null);
+    }
+  };
+
+  const updateOpeningHour = (day: string, value: string) => {
+    setSettingsDraft(prev => ({
+      ...prev,
+      openingHours: { ...(prev.openingHours ?? {}), [day]: value }
+    }));
+  };
+
+
+  const runBillingAction = async (loadingKey: string, action: () => Promise<void>) => {
+    setBillingError(null);
+    setBillingLoading(loadingKey);
+    try {
+      await action();
+      await refreshBilling();
+    } catch (error) {
+      setBillingError(error instanceof Error ? error.message : 'Não foi possível atualizar assinatura.');
+    } finally {
+      setBillingLoading(null);
+    }
+  };
+
+  const handleSelectPlan = (planId: 'starter' | 'pro' | 'premium') => {
+    void runBillingAction('plan-' + planId, async () => {
+      if (currentSubscription) await BillingService.changeSubscriptionPlan(activeRestaurantId, planId);
+      else await BillingService.createSubscription(activeRestaurantId, planId, { name: currentUser.name, email: currentUser.email });
+    });
+  };
+
+  const handleCancelSubscription = () => {
+    void runBillingAction('cancel', async () => {
+      await BillingService.cancelSubscription(activeRestaurantId);
+    });
   };
 
   return (
@@ -334,6 +547,32 @@ export const AdminPanel: React.FC = () => {
         >
           <QrCode className="w-3.5 h-3.5" />
           Configurar Mesas
+        </button>
+
+        <button
+          onClick={() => setActiveTab('staff')}
+          className={`py-4 text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 relative border-b-2 cursor-pointer select-none ${
+            activeTab === 'staff'
+              ? 'border-red-600 text-red-650'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+          id="admin-tab-staff"
+        >
+          <Users className="w-3.5 h-3.5" />
+          Equipe
+        </button>
+
+        <button
+          onClick={() => setActiveTab('subscription')}
+          className={`py-4 text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 relative border-b-2 cursor-pointer select-none ${
+            activeTab === 'subscription'
+              ? 'border-red-600 text-red-650'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+          id="admin-tab-subscription"
+        >
+          <CreditCard className="w-3.5 h-3.5" />
+          Assinatura
         </button>
 
         <button
@@ -659,245 +898,303 @@ export const AdminPanel: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 2: CONFIGURAR MESAS E QR CODE */}
+        {/* TAB 3: CONFIGURAR MESAS E QR CODE */}
         {activeTab === 'tables' && (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            
-            {/* Tables Manager Column */}
             <div className="bg-white rounded-xl border border-slate-200/70 p-5 space-y-4 lg:col-span-1">
               <div>
-                <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">Mesas Ativas</h4>
-                <p className="text-[10px] text-slate-400 mt-0.5">Cadastre ou remova mesas do estabelecimento.</p>
+                <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">Mesas</h4>
+                <p className="text-[10px] text-slate-400 mt-0.5">CRUD salvo em restaurant_tables com restaurant_id ativo.</p>
               </div>
 
-              {/* Form submit add tables */}
+              {adminError && <div className="p-3 rounded-xl border border-red-200 bg-red-50 text-red-700 text-xs font-bold">{adminError}</div>}
+
               <form onSubmit={handleAddTableSubmit} className="flex gap-2">
                 <input
                   type="text"
                   placeholder="Exemplo: Mesa 10"
                   value={newTableNameInput}
                   onChange={(e) => setNewTableNameInput(e.target.value)}
-                  maxLength={12}
-                  className="flex-1 p-2 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 placeholder-slate-400 font-semibold bg-slate-50"
+                  maxLength={32}
+                  disabled={!canManageTables}
+                  className="flex-1 p-2 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 placeholder-slate-400 font-semibold bg-slate-50 disabled:opacity-60"
                   id="table-add-input"
                 />
                 <button
                   type="submit"
-                  className="px-3.5 bg-slate-950 hover:bg-slate-855 text-white font-black text-xs rounded-lg transition active:scale-95 flex items-center gap-1 cursor-pointer select-none"
+                  disabled={!canManageTables || adminLoading === 'add-table'}
+                  className="px-3.5 bg-slate-950 hover:bg-slate-855 disabled:opacity-60 text-white font-black text-xs rounded-lg transition active:scale-95 flex items-center gap-1 cursor-pointer select-none"
                   id="table-add-btn-submit"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  +
+                  {adminLoading === 'add-table' ? '...' : '+'}
                 </button>
               </form>
 
-              {/* List scroll - Vermelho no Rosa */}
-              <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto pr-1">
-                {tables.map(tab => (
-                  <div key={tab} className="py-2.5 flex items-center justify-between text-xs font-bold text-slate-850">
-                    <span className="uppercase text-slate-900 font-extrabold font-display">{tab}</span>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => setSelectedQRTable(tab)}
-                        className="text-slate-400 hover:text-slate-950 p-1 rounded hover:bg-slate-100 transition cursor-pointer"
-                        id={`generate-qr-${tab}`}
-                        title="Gerar QR Code"
-                      >
-                        <QrCode className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => deleteTable(tab)}
-                        className="text-slate-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition cursor-pointer"
-                        id={`delete-table-${tab}`}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Live QR Creator Preview Column */}
-            <div className="bg-white rounded-xl border border-slate-200/70 p-5 space-y-4 lg:col-span-2">
-              <div>
-                <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">Gerador de QR Code de Autoatendimento</h4>
-                <p className="text-[10px] text-slate-400 mt-0.5">Os clientes leem o código na mesa para acessar o cardápio sincronizado!</p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
-                
-                {/* Select mesa */}
-                <div className="space-y-3">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase leading-none">Mesa Alvo para QR Code</label>
-                    <select
-                      value={selectedQRTable}
-                      onChange={(e) => setSelectedQRTable(e.target.value)}
-                      className="w-full text-xs font-bold border border-slate-250 rounded-lg p-2.5 outline-hidden focus:border-red-650 cursor-pointer text-slate-800 bg-white"
-                      id="qr-table-select-target"
-                    >
-                      {tables.map(t => (
-                        <option key={t} value={t} className="uppercase font-bold">{t}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Vermelho no Rosa */}
-                  <div className="p-3.5 rounded-xl bg-slate-100 border text-[10.5px] leading-relaxed text-slate-500 space-y-2 font-semibold">
-                    <p>🔗 <strong>Link de acesso por QR:</strong></p>
-                    <a
-                      href={publicTableUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[9.5px] block p-2 bg-white hover:bg-slate-50 rounded border select-all truncate font-mono text-red-650 font-black uppercase underline decoration-red-600/30 transition hover:text-red-750 cursor-pointer"
-                      title="Clique para abrir o cardápio desta mesa em uma nova aba"
-                    >
-                      {publicTableUrl}
-                    </a>
-                    <p className="pt-1 border-t text-[10px] border-slate-200">Clique no link acima para abrir o autoatendimento pré-configurado para esta mesa em uma nova aba do navegador.</p>
-                  </div>
-                </div>
-
-                {/* Styled Print QR Code card element - Vermelho no Rosa e Fundo Azul Usar Preto */}
-                <div className="p-6 bg-black rounded-2xl flex flex-col items-center text-center shadow-xl select-none" id="qr-card-print border border-slate-800">
-                  <span className="text-[9px] font-black uppercase tracking-widest text-red-500 leading-none mb-1">
-                    FluxMenu • {restaurantConfig.name}
-                  </span>
-                  <span className="text-xl font-black uppercase text-white font-display tracking-wide mb-3">
-                    {selectedQRTable}
-                  </span>
-
-                  {/* QR code preview */}
-                  <div className="p-4 bg-white rounded-xl shadow-md flex items-center justify-center shrink-0">
-                    {qrDataUrl ? (
-                      <img src={qrDataUrl} alt={`QR Code ${selectedQRTable}`} className="w-28 h-28 object-contain" />
+              <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto pr-1">
+                {tableRecords.map(table => (
+                  <div key={table.id ?? table.label} className="py-2.5 text-xs font-bold text-slate-850">
+                    {editingTable?.id === table.id ? (
+                      <form onSubmit={handleUpdateTableSubmit} className="flex items-center gap-2">
+                        <input
+                          value={editingTable.label}
+                          onChange={(e) => setEditingTable({ ...editingTable, label: e.target.value })}
+                          className="flex-1 p-2 border border-slate-200 rounded-lg text-xs font-bold"
+                          autoFocus
+                        />
+                        <button type="submit" disabled={adminLoading === 'edit-table-' + table.id} className="p-2 text-emerald-700 hover:bg-emerald-50 rounded-lg disabled:opacity-60">
+                          <Check className="w-3.5 h-3.5" />
+                        </button>
+                        <button type="button" onClick={() => setEditingTable(null)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </form>
                     ) : (
-                      <div className="w-28 h-28 border border-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400 uppercase">
-                        Gerando
+                      <div className="flex items-center justify-between gap-2">
+                        <button onClick={() => setEditingTable(table)} disabled={!canManageTables} className="uppercase text-slate-900 font-extrabold font-display disabled:cursor-not-allowed">
+                          {table.label}
+                        </button>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => setSelectedQRTable(table.label)} className="text-slate-400 hover:text-slate-950 p-1 rounded hover:bg-slate-100 transition cursor-pointer" title="Gerar QR Code">
+                            <QrCode className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => void handleDeleteTable(table)} disabled={!canManageTables || adminLoading === 'delete-table-' + (table.id ?? table.label)} className="text-slate-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition cursor-pointer disabled:opacity-40">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
+                ))}
+                {tableRecords.length === 0 && <p className="py-4 text-xs text-slate-400 font-bold">Nenhuma mesa cadastrada.</p>}
+              </div>
+            </div>
 
-                  {qrError && <span className="text-[9.5px] text-red-400 leading-relaxed font-bold mt-3 max-w-[180px]">{qrError}</span>}
-                  <span className="text-[9.5px] text-slate-400 leading-relaxed font-bold mt-3 max-w-[180px] break-all">
-                    {publicTableUrl}
-                  </span>
+            <div className="bg-white rounded-xl border border-slate-200/70 p-5 space-y-4 lg:col-span-2">
+              <div>
+                <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">QR Code de Autoatendimento</h4>
+                <p className="text-[10px] text-slate-400 mt-0.5">Link público preservado para clientes, sem exigir login.</p>
+              </div>
 
-                  <div className="grid grid-cols-2 gap-2 w-full mt-4">
-                    <button
-                      onClick={() => void copyPublicTableUrl()}
-                      className="h-9 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[10px] font-black uppercase transition flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                      Copiar
-                    </button>
-                    <button
-                      onClick={downloadQrCode}
-                      disabled={!qrDataUrl}
-                      className="h-9 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white rounded-lg text-[10px] font-black uppercase transition flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      PNG
-                    </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase leading-none">Mesa alvo</label>
+                    <select value={selectedQRTable} onChange={(e) => setSelectedQRTable(e.target.value)} className="w-full text-xs font-bold border border-slate-250 rounded-lg p-2.5 outline-hidden focus:border-red-650 cursor-pointer text-slate-800 bg-white" id="qr-table-select-target">
+                      {tableRecords.filter(table => table.active !== false).map(t => <option key={t.id ?? t.label} value={t.label}>{t.label}</option>)}
+                    </select>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-slate-100 border text-[10.5px] leading-relaxed text-slate-500 space-y-2 font-semibold">
+                    <p><strong>Link de acesso por QR:</strong></p>
+                    <a href={publicTableUrl} target="_blank" rel="noopener noreferrer" className="text-[9.5px] block p-2 bg-white hover:bg-slate-50 rounded border select-all truncate font-mono text-red-650 font-black uppercase underline decoration-red-600/30 transition hover:text-red-750 cursor-pointer" title="Clique para abrir o cardápio desta mesa em uma nova aba">
+                      {publicTableUrl}
+                    </a>
                   </div>
                 </div>
 
+                <div className="p-6 bg-black rounded-2xl flex flex-col items-center text-center shadow-xl select-none border border-slate-800">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-red-500 leading-none mb-1">FluxMenu • {restaurantConfig.name}</span>
+                  <span className="text-xl font-black uppercase text-white font-display tracking-wide mb-3">{selectedQRTable}</span>
+                  <div className="p-4 bg-white rounded-xl shadow-md flex items-center justify-center shrink-0">
+                    {qrDataUrl ? <img src={qrDataUrl} alt={`QR Code ${selectedQRTable}`} className="w-28 h-28 object-contain" /> : <div className="w-28 h-28 border border-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400 uppercase">Gerando</div>}
+                  </div>
+                  {qrError && <span className="text-[9.5px] text-red-400 leading-relaxed font-bold mt-3 max-w-[180px]">{qrError}</span>}
+                  <span className="text-[9.5px] text-slate-400 leading-relaxed font-bold mt-3 max-w-[180px] break-all">{publicTableUrl}</span>
+                  <div className="grid grid-cols-2 gap-2 w-full mt-4">
+                    <button onClick={() => void copyPublicTableUrl()} className="h-9 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[10px] font-black uppercase transition flex items-center justify-center gap-1.5 cursor-pointer"><Copy className="w-3.5 h-3.5" />Copiar</button>
+                    <button onClick={downloadQrCode} disabled={!qrDataUrl} className="h-9 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white rounded-lg text-[10px] font-black uppercase transition flex items-center justify-center gap-1.5 cursor-pointer"><Download className="w-3.5 h-3.5" />PNG</button>
+                  </div>
+                </div>
               </div>
             </div>
-
           </div>
         )}
 
-        {/* TAB 3: RESTAURANT PROFILE CONFIGS */}
-        {activeTab === 'settings' && (
-          <div className="bg-white rounded-xl border border-slate-200/70 p-5 space-y-6">
-            <div>
-              <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">Identidade Corporativa e Estabelecimento</h4>
-              <p className="text-[10px] text-slate-400 mt-0.5">Defina logos, descrições e detalhes comerciais expostos no cabeçalho do POS.</p>
+        {/* TAB 4: FUNCIONARIOS */}
+        {activeTab === 'staff' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl border border-slate-200/70 p-5 space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">Funcionários e Permissões</h4>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Equipe carregada de restaurant_members, sempre filtrada por restaurant_id.</p>
+                </div>
+                {staffLoading && <span className="text-[10px] font-black uppercase text-slate-400">Carregando...</span>}
+              </div>
+
+              {!canManageStaff && <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">Seu perfil não pode gerenciar funcionários.</div>}
+              {staffError && <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold">{staffError}</div>}
+
+              <form onSubmit={handleInviteStaff} className="grid grid-cols-1 md:grid-cols-[1fr_180px_auto] gap-2">
+                <input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} type="email" placeholder="email@restaurante.com" disabled={!canManageStaff || staffLoading} className="p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 font-semibold bg-slate-50 disabled:opacity-60" />
+                <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as UserRole)} disabled={!canManageStaff || staffLoading} className="p-2.5 border border-slate-200 rounded-lg text-xs font-bold bg-white disabled:opacity-60">
+                  {assignableRoles.map(role => <option key={role} value={role}>{role}</option>)}
+                </select>
+                <button type="submit" disabled={!canManageStaff || staffLoading || assignableRoles.length === 0} className="h-10 px-4 rounded-lg bg-slate-950 text-white text-xs font-black uppercase flex items-center justify-center gap-2 disabled:opacity-60">
+                  <UserPlus className="w-3.5 h-3.5" /> Convidar
+                </button>
+              </form>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              {canUseAI ? (
-                <div className="p-4 bg-slate-950 text-white rounded-xl border border-slate-900">
-                  <h5 className="text-xs font-black uppercase tracking-wider">IA habilitada</h5>
-                  <p className="text-[10px] text-slate-300 mt-1 font-semibold">Recursos inteligentes preparados para o plano {currentPlan.name}.</p>
-                </div>
-              ) : (
-                <button onClick={() => showUpgradeNotice('IA')} className="text-left">
-                  <UpgradeNotice title="IA bloqueada" description="Assistentes e automações inteligentes fazem parte do plano Premium." />
-                </button>
-              )}
+            <div className="bg-white rounded-xl border border-slate-200/70 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 border-b border-slate-150 text-slate-500 font-bold uppercase text-[9px] tracking-wider">
+                    <tr><th className="p-4">Usuário</th><th className="p-4">Permissão</th><th className="p-4">Status</th><th className="p-4 text-right">Ações</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {staffMembers.map(member => (
+                      <tr key={member.id}>
+                        <td className="p-4"><span className="font-black text-slate-900 block">{member.name}</span><span className="text-[10px] text-slate-400 font-bold">{member.email || member.profileId}</span></td>
+                        <td className="p-4">
+                          {member.role === 'owner' ? <span className="font-black uppercase text-red-650">owner</span> : (
+                            <select value={member.role} onChange={(e) => void handleStaffRoleChange(member, e.target.value as UserRole)} disabled={!canManageStaff || staffLoading || !assignableRoles.includes(member.role)} className="p-2 border border-slate-200 rounded-lg text-xs font-bold disabled:opacity-60">
+                              {assignableRoles.map(role => <option key={role} value={role}>{role}</option>)}
+                            </select>
+                          )}
+                        </td>
+                        <td className="p-4"><span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase ${member.active ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'}`}>{member.active ? 'ativo' : 'inativo'}</span></td>
+                        <td className="p-4 text-right">
+                          <button onClick={() => void handleStaffActiveChange(member, !member.active)} disabled={!canManageStaff || member.role === 'owner' || (currentUser.role === 'manager' && member.role === 'manager') || staffLoading} className="px-3 py-1.5 rounded-lg border border-slate-200 text-[10px] font-black uppercase text-slate-600 hover:text-red-600 disabled:opacity-40">
+                            <Power className="w-3.5 h-3.5 inline mr-1" /> {member.active ? 'Desativar' : 'Ativar'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {staffMembers.length === 0 && <tr><td colSpan={4} className="p-6 text-center text-xs text-slate-400 font-bold">Nenhum funcionário encontrado.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
 
-              {canUseAdvancedCustomization ? (
-                <div className="p-4 bg-emerald-600 text-white rounded-xl border border-emerald-700">
-                  <h5 className="text-xs font-black uppercase tracking-wider">Personalização avançada</h5>
-                  <p className="text-[10px] text-emerald-50 mt-1 font-semibold">Configurações avançadas liberadas para este plano.</p>
-                </div>
-              ) : (
-                <button onClick={() => showUpgradeNotice('Personalização avançada')} className="text-left">
-                  <UpgradeNotice title="Personalização avançada bloqueada" description="Temas, marca e ajustes avançados são recursos Premium." />
-                </button>
-              )}
+            <div className="bg-white rounded-xl border border-slate-200/70 p-5 space-y-3">
+              <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">Convites</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                {staffInvitations.map(invitation => (
+                  <div key={invitation.id} className="border border-slate-200 rounded-xl p-3">
+                    <span className="text-xs font-black text-slate-900 block truncate">{invitation.email}</span>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">{invitation.role} • {invitation.status}</span>
+                    {invitation.status === 'pending' && <button onClick={() => void StaffService.revokeInvitation(activeRestaurantId, invitation.id).then(reloadStaff).catch(error => setStaffError(error instanceof Error ? error.message : 'Não foi possível revogar convite.'))} className="mt-2 text-[10px] font-black uppercase text-red-600">Revogar</button>}
+                  </div>
+                ))}
+                {staffInvitations.length === 0 && <p className="text-xs text-slate-400 font-bold">Nenhum convite criado.</p>}
+              </div>
+            </div>
+          </div>
+        )}
 
-              {canUseAdvancedPermissions ? (
-                <div className="p-4 bg-red-600 text-white rounded-xl border border-red-700 md:col-span-2">
-                  <h5 className="text-xs font-black uppercase tracking-wider">Permissões avançadas</h5>
-                  <p className="text-[10px] text-red-50 mt-1 font-semibold">Camada preparada para regras granulares por equipe e unidade.</p>
+        {/* TAB 5: ASSINATURA */}
+        {activeTab === 'subscription' && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+              <div className="bg-white rounded-xl border border-slate-200/70 p-5 xl:col-span-2">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">Assinatura SaaS Asaas</h4>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Plano e cobrança vêm do Supabase atualizado por Edge Functions e webhooks.</p>
+                  </div>
+                  <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase ${currentSubscription?.status === 'past_due' ? 'bg-red-600 text-white' : currentSubscription?.status === 'canceled' ? 'bg-slate-200 text-slate-600' : 'bg-emerald-600 text-white'}`}>
+                    {currentSubscription?.status ?? 'sem assinatura'}
+                  </span>
                 </div>
-              ) : (
-                <button onClick={() => showUpgradeNotice('Permissões avançadas')} className="text-left md:col-span-2">
-                  <UpgradeNotice title="Permissões avançadas bloqueadas" description="Regras granulares por equipe e unidade estão disponíveis no Premium." />
+
+                {billingError && <div className="mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold">{billingError}</div>}
+                {currentUser.role !== 'owner' && <div className="mt-4 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">Apenas owner pode alterar cobrança.</div>}
+                {currentSubscription?.status === 'past_due' && <div className="mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold">Assinatura inadimplente: recursos pagos ficam bloqueados até confirmação do pagamento pelo webhook.</div>}
+
+                <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {Object.values(SAAS_PLANS).map(plan => {
+                    const isCurrent = currentPlanId === plan.id;
+                    return (
+                      <div key={plan.id} className={`border rounded-xl p-4 ${isCurrent ? 'border-red-600 bg-red-50/40' : 'border-slate-200 bg-white'}`}>
+                        <h5 className="text-sm font-black text-slate-900 uppercase">{plan.name}</h5>
+                        <p className="text-xs font-black font-mono text-slate-700 mt-1">{plan.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/mês</p>
+                        <button
+                          onClick={() => handleSelectPlan(plan.id)}
+                          disabled={currentUser.role !== 'owner' || billingLoading !== null || (isCurrent && currentSubscription?.status !== 'canceled')}
+                          className="mt-4 w-full h-9 rounded-lg bg-slate-950 text-white text-[10px] font-black uppercase disabled:opacity-50"
+                        >
+                          {billingLoading === 'plan-' + plan.id ? 'Processando...' : isCurrent ? 'Plano atual' : currentSubscription ? 'Alterar plano' : 'Assinar'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl border border-slate-200/70 p-5 space-y-3">
+                <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">Status</h4>
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between border-b border-slate-100 pb-2"><span className="font-bold text-slate-500">Plano</span><span className="font-black text-slate-900">{currentPlan.name}</span></div>
+                  <div className="flex justify-between border-b border-slate-100 pb-2"><span className="font-bold text-slate-500">Trial até</span><span className="font-black text-slate-900">{currentSubscription?.trialEndsAt?.slice(0, 10) ?? '-'}</span></div>
+                  <div className="flex justify-between border-b border-slate-100 pb-2"><span className="font-bold text-slate-500">Próximo vencimento</span><span className="font-black text-slate-900">{currentSubscription?.currentPeriodEnd?.slice(0, 10) ?? '-'}</span></div>
+                </div>
+                {currentSubscription?.checkoutUrl && <a href={currentSubscription.checkoutUrl} target="_blank" rel="noopener noreferrer" className="block h-9 rounded-lg bg-emerald-600 text-white text-[10px] font-black uppercase text-center leading-9">Abrir cobrança</a>}
+                <button onClick={handleCancelSubscription} disabled={currentUser.role !== 'owner' || !currentSubscription || billingLoading !== null || currentSubscription.status === 'canceled'} className="w-full h-9 rounded-lg border border-red-200 text-red-600 text-[10px] font-black uppercase disabled:opacity-50">
+                  {billingLoading === 'cancel' ? 'Cancelando...' : 'Cancelar assinatura'}
                 </button>
-              )}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-slate-200/70 overflow-hidden">
+              <div className="p-5 border-b border-slate-100"><h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">Histórico de Cobrança</h4></div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 border-b border-slate-150 text-slate-500 font-bold uppercase text-[9px] tracking-wider"><tr><th className="p-4">Cobrança</th><th className="p-4">Status</th><th className="p-4">Valor</th><th className="p-4">Vencimento</th><th className="p-4 text-right">Link</th></tr></thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {billingPayments.map(payment => <tr key={payment.id}><td className="p-4 font-mono font-bold text-slate-700">{payment.providerPaymentId ?? payment.id}</td><td className="p-4 font-black uppercase">{payment.status}</td><td className="p-4 font-mono font-black">{payment.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td><td className="p-4 font-bold text-slate-500">{payment.dueDate ?? '-'}</td><td className="p-4 text-right">{payment.invoiceUrl ? <a href={payment.invoiceUrl} target="_blank" rel="noopener noreferrer" className="text-red-600 font-black uppercase text-[10px]">Abrir</a> : '-'}</td></tr>)}
+                    {billingPayments.length === 0 && <tr><td colSpan={5} className="p-6 text-center text-xs text-slate-400 font-bold">Nenhuma cobrança recebida ainda.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 6: RESTAURANT PROFILE CONFIGS */}
+        {activeTab === 'settings' && (
+          <div className="bg-white rounded-xl border border-slate-200/70 p-5 space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div>
+                <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">Configurações Gerais da Loja</h4>
+                <p className="text-[10px] text-slate-400 mt-0.5">Identidade, contato, imagens, cores e horários salvos no Supabase.</p>
+              </div>
+              <button onClick={() => void handleSaveSettings()} disabled={!canManageRestaurant || settingsLoading !== null} className="h-10 px-4 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-xs font-black uppercase flex items-center justify-center gap-2">
+                <Save className="w-3.5 h-3.5" /> {settingsLoading === 'settings' ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+
+            {!canManageRestaurant && <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">Seu perfil não pode editar a loja.</div>}
+            {settingsError && <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold">{settingsError}</div>}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5"><label className="text-xs font-bold text-slate-500">Nome Oficial</label><input value={settingsDraft.name} onChange={(e) => setSettingsDraft({ ...settingsDraft, name: e.target.value })} disabled={!canManageRestaurant} className="w-full p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 font-bold text-slate-800 disabled:opacity-60" /></div>
+              <div className="space-y-1.5"><label className="text-xs font-bold text-slate-500">Telefone</label><input value={settingsDraft.phone ?? ''} onChange={(e) => setSettingsDraft({ ...settingsDraft, phone: e.target.value })} disabled={!canManageRestaurant} className="w-full p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 font-normal text-slate-705 disabled:opacity-60" /></div>
+              <div className="space-y-1.5"><label className="text-xs font-bold text-slate-500">Endereço</label><input value={settingsDraft.address} onChange={(e) => setSettingsDraft({ ...settingsDraft, address: e.target.value })} disabled={!canManageRestaurant} className="w-full p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 font-normal text-slate-705 disabled:opacity-60" /></div>
+              <div className="space-y-1.5"><label className="text-xs font-bold text-slate-500">Instagram</label><input value={settingsDraft.instagram} onChange={(e) => setSettingsDraft({ ...settingsDraft, instagram: e.target.value })} disabled={!canManageRestaurant} className="w-full p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 font-normal text-slate-705 disabled:opacity-60" /></div>
+              <div className="space-y-1.5"><label className="text-xs font-bold text-slate-500">Tempo de entrega/preparo</label><input value={settingsDraft.deliveryEstimate} onChange={(e) => setSettingsDraft({ ...settingsDraft, deliveryEstimate: e.target.value })} disabled={!canManageRestaurant} className="w-full p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 font-normal text-slate-705 disabled:opacity-60" /></div>
+              <div className="space-y-1.5"><label className="text-xs font-bold text-slate-500">Avaliação exibida</label><input value={settingsDraft.rating} onChange={(e) => setSettingsDraft({ ...settingsDraft, rating: e.target.value })} disabled={!canManageRestaurant} className="w-full p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 font-normal text-slate-705 disabled:opacity-60" /></div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500">Nome Oficial do Estabelecimento</label>
-                <input
-                  type="text"
-                  value={restaurantConfig.name}
-                  onChange={(e) => setRestaurantConfig({ ...restaurantConfig, name: e.target.value })}
-                  placeholder="Nome do Restaurante"
-                  className="w-full p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 font-bold text-slate-800"
-                  id="config-name-input"
-                />
-              </div>
+              <div className="space-y-2 border border-slate-200 rounded-xl p-4"><div className="flex items-center gap-2 text-xs font-black uppercase text-slate-900"><ImageIcon className="w-4 h-4" />Logo</div>{settingsDraft.logoUrl && <img src={settingsDraft.logoUrl} alt="Logo" className="w-20 h-20 object-cover rounded-xl border border-slate-200" />}<input type="file" accept="image/*" disabled={!canManageRestaurant || settingsLoading === 'logo'} onChange={(e) => void handleAssetUpload('logo', e.target.files?.[0] ?? null)} className="text-xs" /></div>
+              <div className="space-y-2 border border-slate-200 rounded-xl p-4"><div className="flex items-center gap-2 text-xs font-black uppercase text-slate-900"><ImageIcon className="w-4 h-4" />Banner</div>{settingsDraft.bannerUrl && <img src={settingsDraft.bannerUrl} alt="Banner" className="w-full h-24 object-cover rounded-xl border border-slate-200" />}<input type="file" accept="image/*" disabled={!canManageRestaurant || settingsLoading === 'banner'} onChange={(e) => void handleAssetUpload('banner', e.target.files?.[0] ?? null)} className="text-xs" /></div>
+            </div>
 
-              <div className="space-y-1.5 font-bold">
-                <label className="text-xs font-bold text-slate-500">Endereço Físico</label>
-                <input
-                  type="text"
-                  value={restaurantConfig.address}
-                  onChange={(e) => setRestaurantConfig({ ...restaurantConfig, address: e.target.value })}
-                  placeholder="Endereço"
-                  className="w-full p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 font-normal text-slate-705"
-                  id="config-address-input"
-                />
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5"><label className="text-xs font-bold text-slate-500 flex items-center gap-1"><Palette className="w-3.5 h-3.5" />Cor primária</label><input type="color" value={settingsDraft.primaryColor ?? '#dc2626'} onChange={(e) => setSettingsDraft({ ...settingsDraft, primaryColor: e.target.value })} disabled={!canManageRestaurant} className="w-full h-10 border border-slate-200 rounded-lg" /></div>
+              <div className="space-y-1.5"><label className="text-xs font-bold text-slate-500 flex items-center gap-1"><Palette className="w-3.5 h-3.5" />Cor secundária</label><input type="color" value={settingsDraft.secondaryColor ?? '#0f172a'} onChange={(e) => setSettingsDraft({ ...settingsDraft, secondaryColor: e.target.value })} disabled={!canManageRestaurant} className="w-full h-10 border border-slate-200 rounded-lg" /></div>
+            </div>
 
-              <div className="space-y-1.5 font-bold">
-                <label className="text-xs font-bold text-slate-500">Contato Comercial</label>
-                <input
-                  type="text"
-                  value={restaurantConfig.phone}
-                  onChange={(e) => setRestaurantConfig({ ...restaurantConfig, phone: e.target.value })}
-                  placeholder="Telefone"
-                  className="w-full p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 font-normal text-slate-705"
-                  id="config-phone-input"
-                />
-              </div>
-
-              <div className="space-y-1.5 flex flex-col justify-end">
-                <div className="p-3 bg-emerald-600 text-white font-bold rounded-lg text-[10.5px] leading-tight border border-emerald-700 shadow-sm">
-                  ⚡ <strong>Persistência Local Ativa:</strong> Todas as modificações feitas permanecem gravadas permanentemente no seu navegador usando o LocalState.
-                </div>
+            <div className="space-y-3">
+              <h5 className="text-xs font-black uppercase text-slate-900 tracking-wider flex items-center gap-2"><Clock className="w-4 h-4" />Horários</h5>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                {weekDays.map(([key, label]) => <div key={key} className="space-y-1"><label className="text-[10px] font-bold uppercase text-slate-400">{label}</label><input value={settingsDraft.openingHours?.[key] ?? ''} onChange={(e) => updateOpeningHour(key, e.target.value)} placeholder="11:00-23:00 ou fechado" disabled={!canManageRestaurant} className="w-full p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 disabled:opacity-60" /></div>)}
               </div>
             </div>
           </div>
         )}
-
       </div>
 
       {/* MODAL EDIT ELEMENT FOR PRODUCTS CATALOG */}

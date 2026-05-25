@@ -92,6 +92,7 @@ export interface RestaurantTable {
   restaurantId: RestaurantId;
   label: string;
   slug: string;
+  active?: boolean;
 }
 
 export interface PaymentLog {
@@ -121,6 +122,11 @@ export interface RestaurantConfig {
   address: string;
   instagram: string;
   phone?: string;
+  logoUrl?: string;
+  bannerUrl?: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  openingHours?: Record<string, string>;
 }
 
 export type UserRole = 'owner' | 'manager' | 'kitchen' | 'cashier' | 'waiter' | 'customer';
@@ -143,4 +149,29 @@ export interface RolePermissionConfig {
   canUpdateKDS: boolean;
   canCreateManualOrders: boolean;
   canOrderForAnyTable: boolean;
+}
+
+export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'canceled' | 'incomplete';
+
+export interface RestaurantSubscriptionStatus {
+  id: string;
+  restaurantId: RestaurantId;
+  planId: SaaSPlanId;
+  status: SubscriptionStatus;
+  billingStatus?: SubscriptionStatus;
+  checkoutUrl?: string | null;
+  trialEndsAt?: string | null;
+  currentPeriodEnd?: string | null;
+  cancelAtPeriodEnd?: boolean;
+}
+
+export interface BillingPayment {
+  id: string;
+  status: string;
+  value: number;
+  dueDate?: string | null;
+  paidAt?: string | null;
+  invoiceUrl?: string | null;
+  providerPaymentId?: string;
+  createdAt?: string;
 }

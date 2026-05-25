@@ -87,3 +87,12 @@ export function getPlanLimit(planId: SaaSPlanId, limit: SaaSLimit): number {
 export function isUnlimitedLimit(value: number): boolean {
   return value < 0;
 }
+
+export function getSubscriptionForRestaurant(restaurantId: RestaurantId): PlanSupabaseRepository.RestaurantSubscription | null {
+  return subscriptionsCache?.find(subscription => subscription.restaurantId === restaurantId) ?? null;
+}
+
+export function isSubscriptionEntitled(subscription: PlanSupabaseRepository.RestaurantSubscription | null): boolean {
+  if (!subscription) return false;
+  return subscription.status === 'trialing' || subscription.status === 'active';
+}

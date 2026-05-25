@@ -271,6 +271,26 @@ export async function updateSupabaseRows<T>(tableName: string, query: string, pa
   return response.json() as Promise<T[]>;
 }
 
+export async function uploadSupabaseAsset(bucketName: string, path: string, file: File): Promise<string> {
+  const baseUrl = getSupabaseBaseUrl();
+  const response = await fetch(baseUrl + '/storage/v1/object/' + bucketName + '/' + path, {
+    method: 'POST',
+    headers: {
+      apikey: supabaseAnonKey,
+      Authorization: 'Bearer ' + getAuthorizationToken(),
+      'Content-Type': file.type || 'application/octet-stream',
+      'x-upsert': 'true'
+    },
+    body: file
+  });
+
+  if (!response.ok) {
+    throw new Error('Supabase upload failed for ' + path + ': ' + response.status + ' ' + response.statusText);
+  }
+
+  return baseUrl + '/storage/v1/object/public/' + bucketName + '/' + path;
+}
+
 export async function insertSupabaseRows<T>(tableName: string, payload: Record<string, unknown>): Promise<T[]> {
   const baseUrl = getSupabaseBaseUrl();
   const response = await fetch(baseUrl + '/rest/v1/' + tableName, {
@@ -313,6 +333,32 @@ export async function callSupabaseRpc<T>(functionName: string, payload: Record<s
       // Keep HTTP details when Supabase does not return a JSON body.
     }
     throw new Error('Supabase RPC failed for ' + functionName + ': ' + details);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+export async function invokeSupabaseFunction<T>(functionName: string, payload: Record<string, unknown>): Promise<T> {
+  const baseUrl = getSupabaseBaseUrl();
+  const response = await fetch(baseUrl + '/functions/v1/' + functionName, {
+    method: 'POST',
+    headers: {
+      apikey: supabaseAnonKey,
+      Authorization: 'Bearer ' + getAuthorizationToken(),
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    let message = 'Supabase function failed for ' + functionName + ': ' + response.status + ' ' + response.statusText;
+    try {
+      const body = await response.json() as { error?: string; message?: string };
+      message = body.error ?? body.message ?? message;
+    } catch {
+      // Keep HTTP details when the function does not return a JSON body.
+    }
+    throw new Error(message);
   }
 
   return response.json() as Promise<T>;

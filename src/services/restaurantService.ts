@@ -73,6 +73,13 @@ export function updateRestaurantConfig(configs: RestaurantConfig[], updated: Res
   return configs.map(config => config.restaurantId === updated.restaurantId ? updated : config);
 }
 
+export async function saveRestaurantConfig(updated: RestaurantConfig): Promise<RestaurantConfig> {
+  const saved = await RestaurantSupabaseRepository.updateRestaurantProfile(updated);
+  restaurantProfilesCache = updateRestaurantConfig(restaurantProfilesCache ?? [], saved);
+  logDataSource('restaurant_settings update', 'supabase', { restaurantId: saved.restaurantId });
+  return saved;
+}
+
 export function getRestaurants(): Restaurant[] {
   return (restaurantsCache ?? RestaurantRepository.findAllRestaurants()).map(restaurant => ({ ...restaurant }));
 }

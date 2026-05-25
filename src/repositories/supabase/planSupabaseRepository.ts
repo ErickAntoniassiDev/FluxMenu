@@ -1,5 +1,5 @@
 import { selectFromSupabase } from '../../lib/supabase/client';
-import { SaaSFeature, SaaSLimit, SaaSPlan, SaaSPlanId } from '../../types';
+import { SaaSFeature, SaaSLimit, SaaSPlan, SaaSPlanId, SubscriptionStatus } from '../../types';
 
 type SupabasePlanRow = {
   id: SaaSPlanId;
@@ -16,14 +16,24 @@ type SupabaseSubscriptionRow = {
   id: string;
   restaurant_id: string;
   plan_id: SaaSPlanId;
-  status: 'trialing' | 'active' | 'past_due' | 'canceled';
+  status: SubscriptionStatus;
+  billing_status?: SubscriptionStatus | null;
+  checkout_url?: string | null;
+  trial_ends_at?: string | null;
+  current_period_end?: string | null;
+  cancel_at_period_end?: boolean | null;
 };
 
 export type RestaurantSubscription = {
   id: string;
   restaurantId: string;
   planId: SaaSPlanId;
-  status: SupabaseSubscriptionRow['status'];
+  status: SubscriptionStatus;
+  billingStatus?: SubscriptionStatus;
+  checkoutUrl?: string | null;
+  trialEndsAt?: string | null;
+  currentPeriodEnd?: string | null;
+  cancelAtPeriodEnd?: boolean;
 };
 
 function toPlan(row: SupabasePlanRow): SaaSPlan {
@@ -43,7 +53,12 @@ function toSubscription(row: SupabaseSubscriptionRow): RestaurantSubscription {
     id: row.id,
     restaurantId: row.restaurant_id,
     planId: row.plan_id,
-    status: row.status
+    status: row.status,
+    billingStatus: row.billing_status ?? row.status,
+    checkoutUrl: row.checkout_url ?? null,
+    trialEndsAt: row.trial_ends_at ?? null,
+    currentPeriodEnd: row.current_period_end ?? null,
+    cancelAtPeriodEnd: row.cancel_at_period_end ?? false
   };
 }
 
@@ -53,6 +68,6 @@ export async function findAllPlans(): Promise<SaaSPlan[]> {
 }
 
 export async function findAllSubscriptions(): Promise<RestaurantSubscription[]> {
-  const rows = await selectFromSupabase<SupabaseSubscriptionRow>('subscriptions', 'select=id,restaurant_id,plan_id,status&status=in.(trialing,active,past_due)');
+  const rows = await selectFromSupabase<SupabaseSubscriptionRow>('subscriptions', 'select=id,restaurant_id,plan_id,status,billing_status,checkout_url,trial_ends_at,current_period_end,cancel_at_period_end&status=in.(trialing,active,past_due)');
   return rows.map(toSubscription);
 }

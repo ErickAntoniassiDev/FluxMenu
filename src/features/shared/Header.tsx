@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../store/AppContext';
 import { 
   Utensils, 
@@ -49,11 +50,19 @@ export const Header: React.FC = () => {
     logout,
     hasPermission,
     isModeAllowed,
+    isAuthenticated,
   } = useApp();
+
+  const navigate = useNavigate();
+  const modeRoutes = { client: '/pedidos', kitchen: '/cozinha', cashier: '/caixa', admin: '/admin', split: '/dashboard' } as const;
+  const goToMode = (mode: keyof typeof modeRoutes) => {
+    setActiveMode(mode);
+    navigate(modeRoutes[mode]);
+  };
 
   const staffUsers = getStaffUsers(activeRestaurantId);
   const userLimit = getPlanLimit('maxStaffUsers');
-  const visibleStaffUsers = userLimit < 0 ? staffUsers : staffUsers.slice(0, userLimit);
+  const visibleStaffUsers = isAuthenticated ? [currentUser] : (userLimit < 0 ? staffUsers : staffUsers.slice(0, userLimit));
   const canRemoveBranding = currentPlan.features.remove_fluxmenu_branding;
 
   const [showUserDropdown, setShowUserDropdown] = useState(false);
@@ -109,7 +118,7 @@ export const Header: React.FC = () => {
           
           {isModeAllowed('client') && (
             <button
-              onClick={() => setActiveMode('client')}
+              onClick={() => goToMode('client')}
               className={`px-2.5 py-1.5 md:px-3.5 md:py-2 rounded-lg text-[10px] md:text-xs font-bold tracking-wide transition-all duration-200 flex items-center gap-1.5 shrink-0 ${
                 activeMode === 'client' 
                   ? 'bg-slate-950 text-white shadow-xs' 
@@ -125,7 +134,7 @@ export const Header: React.FC = () => {
 
           {isModeAllowed('kitchen') && (
             <button
-              onClick={() => setActiveMode('kitchen')}
+              onClick={() => goToMode('kitchen')}
               className={`px-2.5 py-1.5 md:px-3.5 md:py-2 rounded-lg text-[10px] md:text-xs font-bold tracking-wide transition-all duration-200 flex items-center gap-1.5 shrink-0 ${
                 activeMode === 'kitchen' 
                   ? 'bg-slate-950 text-white shadow-xs' 
@@ -134,14 +143,14 @@ export const Header: React.FC = () => {
               id="nav-kitchen-btn"
             >
               <ChefHat className="w-3.5 h-3.5" />
-              <span className="hidden leading-none md:inline">Painel Cozinha (KDS)</span>
+              <span className="hidden leading-none md:inline">Cozinha</span>
               <span className="md:hidden leading-none">Cozinha</span>
             </button>
           )}
 
           {isModeAllowed('cashier') && (
             <button
-              onClick={() => setActiveMode('cashier')}
+              onClick={() => goToMode('cashier')}
               className={`px-2.5 py-1.5 md:px-3.5 md:py-2 rounded-lg text-[10px] md:text-xs font-bold tracking-wide transition-all duration-200 flex items-center gap-1.5 shrink-0 ${
                 activeMode === 'cashier' 
                   ? 'bg-slate-950 text-white shadow-xs' 
@@ -157,7 +166,7 @@ export const Header: React.FC = () => {
 
           {isModeAllowed('admin') && (
             <button
-              onClick={() => setActiveMode('admin')}
+              onClick={() => goToMode('admin')}
               className={`px-2.5 py-1.5 md:px-3.5 md:py-2 rounded-lg text-[10px] md:text-xs font-bold tracking-wide transition-all duration-200 flex items-center gap-1.5 shrink-0 ${
                 activeMode === 'admin' 
                   ? 'bg-slate-950 text-white shadow-xs' 
@@ -166,14 +175,14 @@ export const Header: React.FC = () => {
               id="nav-admin-btn"
             >
               <Sliders className="w-3.5 h-3.5" />
-              <span className="hidden leading-none md:inline">FluxMenu Admin</span>
+              <span className="hidden leading-none md:inline">Admin</span>
               <span className="md:hidden leading-none">Admin</span>
             </button>
           )}
 
           {isModeAllowed('split') && (
             <button
-              onClick={() => setActiveMode('split')}
+              onClick={() => goToMode('split')}
               className={`px-2.5 py-1.5 md:px-3.5 md:py-2 rounded-lg text-[10px] md:text-xs font-bold tracking-wide transition-all duration-200 flex items-center gap-1.5 shrink-0 ${
                 activeMode === 'split' 
                   ? 'bg-slate-950 text-white shadow-xs' 
@@ -182,8 +191,8 @@ export const Header: React.FC = () => {
               id="nav-split-btn"
             >
               <Layers className="w-3.5 h-3.5" />
-              <span className="hidden leading-none md:inline">Simultâneo</span>
-              <span className="md:hidden leading-none">Dual</span>
+              <span className="hidden leading-none md:inline">Dashboard</span>
+              <span className="md:hidden leading-none">Dashboard</span>
             </button>
           )}
 
