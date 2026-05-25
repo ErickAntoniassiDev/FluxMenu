@@ -21,10 +21,11 @@ export const ClientMenu: React.FC = () => {
   // Live filter catalog products based on search queries and categories
   const filteredProducts = useMemo(() => {
     return products.filter(product => {
+      const matchAvailable = product.available !== false;
       const matchCat = selectedCategory === 'todos' || product.category === selectedCategory;
       const matchSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           product.description.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchCat && matchSearch;
+      return matchAvailable && matchCat && matchSearch;
     });
   }, [products, selectedCategory, searchQuery]);
 

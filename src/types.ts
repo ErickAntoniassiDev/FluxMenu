@@ -41,6 +41,7 @@ export interface CategoryOption {
 export interface Restaurant {
   id: RestaurantId;
   name: string;
+  slug?: string;
 }
 
 export interface Product {
@@ -86,6 +87,13 @@ export interface Order {
   paymentMethod?: 'pix' | 'credito' | 'debito' | 'dinheiro';
 }
 
+export interface RestaurantTable {
+  id?: string;
+  restaurantId: RestaurantId;
+  label: string;
+  slug: string;
+}
+
 export interface PaymentLog {
   id: string;
   restaurantId: RestaurantId;
@@ -105,6 +113,7 @@ export interface Toast {
 
 export interface RestaurantConfig {
   restaurantId: RestaurantId;
+  slug?: string;
   name: string;
   rating: string;
   deliveryEstimate: string;

@@ -26,6 +26,7 @@ interface AppContextType {
   showUpgradeNotice: (featureName: string) => void;
   activeRestaurantId: RestaurantId;
   setActiveRestaurantId: (restaurantId: RestaurantId) => void;
+  setActiveRestaurantBySlug: (slug: string) => void;
   products: Product[];
   productCategories: CategoryOption[];
   orders: Order[];
@@ -302,6 +303,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setTablesByRestaurant(Object.fromEntries(Object.entries(tableLoad.tablesByRestaurant).filter(([restaurantId]) => restaurantIds.includes(restaurantId))));
         setCart(prev => prev.filter(item => item.product.restaurantId === nextRestaurantId));
 
+        if (authSession && restaurantIds.includes(nextRestaurantId)) {
+          const orderLoad = await OrderService.loadOrdersWithFallback(nextRestaurantId);
+          setAllOrders(prev => [
+            ...prev.filter(order => order.restaurantId !== nextRestaurantId),
+            ...orderLoad.orders
+          ]);
+        }
+
         const activeMembership = activeMemberships.find(membership => membership.restaurantId === nextRestaurantId);
         if (authSession && activeMembership) {
           setCurrentUserInternal(AuthService.getUserSessionFromMembership(authSession, activeMembership, nextRestaurantId));
@@ -370,6 +379,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (currentUser.restaurantId !== activeRestaurantId) setCurrentUserInternal(getDefaultUser(activeRestaurantId));
   }, [activeRestaurantId, supabaseConfigured, tables]);
 
+
+  useEffect(() => {
+    if (!supabaseConfigured || !authSession || !activeRestaurantId) return;
+    let cancelled = false;
+
+    const reloadOrders = () => {
+      OrderService.loadOrdersWithFallback(activeRestaurantId)
+        .then(result => {
+          if (cancelled) return;
+          setAllOrders(prev => [
+            ...prev.filter(order => order.restaurantId !== activeRestaurantId),
+            ...result.orders
+          ]);
+        })
+        .catch(error => {
+          if (import.meta.env.DEV) console.warn('[FluxMenu data] Orders realtime reload failed.', error);
+        });
+    };
+
+    reloadOrders();
+    const unsubscribe = OrderService.subscribeToRestaurantOrders(activeRestaurantId, reloadOrders);
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [activeRestaurantId, authSession, supabaseConfigured]);
+
   const showUpgradeNotice = (featureName: string) => {
     addToast(featureName + ' está disponível em um plano superior.', 'info');
   };
@@ -383,6 +419,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (authSession && membership) setCurrentUserInternal(AuthService.getUserSessionFromMembership(authSession, membership, restaurantId));
     setActiveRestaurantIdState(restaurantId);
     localStorage.setItem('flux_active_restaurant_id', restaurantId);
+  };
+
+  const setActiveRestaurantBySlug = (slug: string) => {
+    const normalizedSlug = slug.trim().toLowerCase();
+    const config = restaurantConfigs.find(restaurant => restaurant.slug === normalizedSlug);
+    if (!config || config.restaurantId === activeRestaurantId) return;
+    setActiveRestaurantId(config.restaurantId);
   };
 
   const setActiveMode = (mode: 'client' | 'kitchen' | 'cashier' | 'admin' | 'split') => {
@@ -459,11 +502,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const confirmOrder = async (onSuccess?: () => void) => {
     if (cart.length === 0) return;
-    const newOrder = OrderService.createOrder(cart, tableNumber, activeRestaurantId);
-    setAllOrders(prev => [newOrder, ...prev]);
-    setCart([]);
-    addToast('Pedido ' + newOrder.id + ' enviado para a produção!', 'success');
-    if (onSuccess) onSuccess();
+
+    try {
+      const newOrder = supabaseConfigured
+        ? await OrderService.createOrderInSupabase(cart, tableNumber, activeRestaurantId)
+        : OrderService.createOrder(cart, tableNumber, activeRestaurantId);
+      setAllOrders(prev => OrderService.upsertOrder(prev, newOrder));
+      setCart([]);
+      addToast('Pedido ' + newOrder.id + ' enviado para a produção!', 'success');
+      if (onSuccess) onSuccess();
+    } catch (error) {
+      console.error(error);
+      addToast(error instanceof Error ? error.message : 'Não foi possível enviar o pedido.', 'warning');
+      throw error;
+    }
   };
 
   const updateOrderStatus = (orderId: string, nextStatus: OrderStatus) => {
@@ -476,6 +528,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (nextStatus === 'preparo') desc = 'em preparo';
     if (nextStatus === 'pronto') desc = 'marcado como pronto!';
     if (nextStatus === 'entregue') desc = 'entregue com sucesso!';
+
+    if (supabaseConfigured) {
+      OrderService.updateOrderStatusInSupabase(orderId, activeRestaurantId, nextStatus)
+        .then(updated => {
+          setAllOrders(prev => OrderService.upsertOrder(prev, updated));
+          addToast('Pedido ' + orderId + ' (' + updated.table + ') agora está ' + desc, 'info');
+        })
+        .catch(error => {
+          console.error(error);
+          addToast('Não foi possível atualizar o status no Supabase.', 'warning');
+        });
+      return;
+    }
+
     if (currentOrder) addToast('Pedido ' + orderId + ' (' + currentOrder.table + ') agora está ' + desc, 'info');
     setAllOrders(prev => OrderService.updateOrderStatus(prev, orderId, activeRestaurantId, nextStatus));
   };
@@ -659,6 +725,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showUpgradeNotice,
       activeRestaurantId,
       setActiveRestaurantId,
+      setActiveRestaurantBySlug,
       products,
       productCategories,
       orders,

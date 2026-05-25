@@ -4,6 +4,7 @@ import { Restaurant, RestaurantConfig } from '../../types';
 type SupabaseRestaurantRow = {
   id: string;
   name: string;
+  slug?: string | null;
   status?: string | null;
 };
 
@@ -15,12 +16,14 @@ type SupabaseRestaurantSettingsRow = {
   address?: string | null;
   instagram?: string | null;
   phone?: string | null;
+  restaurant?: { slug?: string | null; name?: string | null } | null;
 };
 
 function toRestaurant(row: SupabaseRestaurantRow): Restaurant {
   return {
     id: row.id,
-    name: row.name
+    name: row.name,
+    slug: row.slug ?? undefined
   };
 }
 
@@ -32,16 +35,17 @@ function toRestaurantConfig(row: SupabaseRestaurantSettingsRow): RestaurantConfi
     deliveryEstimate: row.delivery_estimate ?? '15-25 min',
     address: row.address ?? '',
     instagram: row.instagram ?? '',
-    phone: row.phone ?? ''
+    phone: row.phone ?? '',
+    slug: row.restaurant?.slug ?? undefined
   };
 }
 
 export async function findAllRestaurants(): Promise<Restaurant[]> {
-  const rows = await selectFromSupabase<SupabaseRestaurantRow>('restaurants', 'select=id,name,status&status=eq.active');
+  const rows = await selectFromSupabase<SupabaseRestaurantRow>('restaurants', 'select=id,name,slug,status&status=eq.active');
   return rows.map(toRestaurant);
 }
 
 export async function findAllRestaurantProfiles(): Promise<RestaurantConfig[]> {
-  const rows = await selectFromSupabase<SupabaseRestaurantSettingsRow>('restaurant_settings', 'select=*');
+  const rows = await selectFromSupabase<SupabaseRestaurantSettingsRow>('restaurant_settings', 'select=*,restaurant:restaurants(slug,name)');
   return rows.map(toRestaurantConfig);
 }

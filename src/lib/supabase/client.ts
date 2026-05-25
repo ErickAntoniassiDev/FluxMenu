@@ -1,3 +1,4 @@
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const isDev = import.meta.env.DEV;
@@ -24,6 +25,7 @@ type SupabaseAuthResponse = {
 };
 
 let currentAuthSession: SupabaseAuthSession | null = readStoredAuthSession();
+let supabaseRealtimeClient: SupabaseClient | null = null;
 
 function readStoredAuthSession(): SupabaseAuthSession | null {
   const raw = localStorage.getItem(authStorageKey);
@@ -40,6 +42,7 @@ function persistAuthSession(session: SupabaseAuthSession | null): void {
   currentAuthSession = session;
   if (!session) localStorage.removeItem(authStorageKey);
   else localStorage.setItem(authStorageKey, JSON.stringify(session));
+  syncSupabaseRealtimeAuth();
 }
 
 function toAuthSession(response: SupabaseAuthResponse): SupabaseAuthSession {
@@ -58,12 +61,34 @@ function getAuthorizationToken(): string {
   return currentAuthSession?.accessToken ?? supabaseAnonKey ?? '';
 }
 
-function getSupabaseBaseUrl(): string {
+export function getSupabaseBaseUrl(): string {
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error('Supabase environment variables are not configured.');
   }
 
   return supabaseUrl.replace(/\/$/, '');
+}
+
+
+export function getSupabaseRealtimeClient(): SupabaseClient {
+  const baseUrl = getSupabaseBaseUrl();
+  if (!supabaseRealtimeClient) {
+    supabaseRealtimeClient = createClient(baseUrl, supabaseAnonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      realtime: { params: { eventsPerSecond: 10 } }
+    });
+  }
+
+  if (currentAuthSession?.accessToken) {
+    supabaseRealtimeClient.realtime.setAuth(currentAuthSession.accessToken);
+  }
+
+  return supabaseRealtimeClient;
+}
+
+export function syncSupabaseRealtimeAuth(): void {
+  if (!supabaseRealtimeClient) return;
+  supabaseRealtimeClient.realtime.setAuth(currentAuthSession?.accessToken ?? supabaseAnonKey);
 }
 
 export function isSupabaseConfigured(): boolean {
@@ -207,4 +232,31 @@ export async function insertSupabaseRows<T>(tableName: string, payload: Record<s
   }
 
   return response.json() as Promise<T[]>;
+}
+
+
+export async function callSupabaseRpc<T>(functionName: string, payload: Record<string, unknown>): Promise<T> {
+  const baseUrl = getSupabaseBaseUrl();
+  const response = await fetch(baseUrl + '/rest/v1/rpc/' + functionName, {
+    method: 'POST',
+    headers: {
+      apikey: supabaseAnonKey,
+      Authorization: 'Bearer ' + getAuthorizationToken(),
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    let details = response.status + ' ' + response.statusText;
+    try {
+      const body = await response.json() as { message?: string; details?: string; hint?: string };
+      details = body.message ?? body.details ?? body.hint ?? details;
+    } catch {
+      // Keep HTTP details when Supabase does not return a JSON body.
+    }
+    throw new Error('Supabase RPC failed for ' + functionName + ': ' + details);
+  }
+
+  return response.json() as Promise<T>;
 }
