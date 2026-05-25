@@ -22,10 +22,9 @@ import {
   Clock
 } from 'lucide-react';
 
-const productCategories = getProductCategories();
-
 export const AdminPanel: React.FC = () => {
   const {
+    activeRestaurantId,
     products,
     updateProduct,
     addProduct,
@@ -37,6 +36,8 @@ export const AdminPanel: React.FC = () => {
     addTable,
     deleteTable
   } = useApp();
+
+  const productCategories = getProductCategories(activeRestaurantId);
 
   // Active sub-sections within the Admin
   const [activeTab, setActiveTab] = useState<'catalog' | 'tables' | 'settings'>('catalog');

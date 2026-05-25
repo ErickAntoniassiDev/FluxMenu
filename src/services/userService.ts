@@ -1,10 +1,17 @@
 import { STAFF_USERS } from '../mock/users';
-import { UserSession } from '../types';
+import { RestaurantId, UserSession } from '../types';
 
-export function getStaffUsers(): UserSession[] {
-  return STAFF_USERS.map(user => ({ ...user }));
+export function getStaffUsers(restaurantId: RestaurantId): UserSession[] {
+  return STAFF_USERS
+    .filter(user => user.restaurantId === restaurantId)
+    .map(user => ({ ...user }));
 }
 
-export function getDefaultUser(): UserSession {
-  return { ...STAFF_USERS[0] };
+export function getDefaultUser(restaurantId: RestaurantId): UserSession {
+  const user = STAFF_USERS.find(current => current.restaurantId === restaurantId) ?? STAFF_USERS[0];
+  return { ...user };
+}
+
+export function ensureUserRestaurantId(user: UserSession, restaurantId: RestaurantId): UserSession {
+  return { ...user, restaurantId: user.restaurantId ?? restaurantId };
 }

@@ -1,6 +1,7 @@
-import { CategoryOption } from '../types';
+import { CategoryOption, ProductCategory, RestaurantId } from '../types';
+import { RESTAURANTS } from './restaurants';
 
-export const PRODUCT_CATEGORIES: CategoryOption[] = [
+const CATEGORY_DEFINITIONS: Array<{ id: ProductCategory; label: string }> = [
   { id: 'entradas', label: 'Entradas' },
   { id: 'hamburgueres', label: 'Hambúrgueres' },
   { id: 'pizzas', label: 'Pizzas' },
@@ -8,7 +9,15 @@ export const PRODUCT_CATEGORIES: CategoryOption[] = [
   { id: 'sobremesas', label: 'Sobremesas' }
 ];
 
-export const MENU_FILTER_CATEGORIES: CategoryOption[] = [
-  { id: 'todos', label: 'Tudo' },
-  ...PRODUCT_CATEGORIES
-];
+export const PRODUCT_CATEGORIES: CategoryOption[] = RESTAURANTS.flatMap(restaurant =>
+  CATEGORY_DEFINITIONS.map(category => ({ ...category, restaurantId: restaurant.id }))
+);
+
+export const MENU_FILTER_CATEGORIES: CategoryOption[] = RESTAURANTS.flatMap(restaurant => [
+  { id: 'todos' as const, label: 'Tudo', restaurantId: restaurant.id },
+  ...CATEGORY_DEFINITIONS.map(category => ({ ...category, restaurantId: restaurant.id }))
+]);
+
+export function getDefaultCategoriesForRestaurant(restaurantId: RestaurantId): CategoryOption[] {
+  return PRODUCT_CATEGORIES.filter(category => category.restaurantId === restaurantId);
+}

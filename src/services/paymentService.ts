@@ -1,14 +1,19 @@
-import { Order, PaymentLog } from '../types';
+import { Order, PaymentLog, RestaurantId } from '../types';
 
 export type PaymentMethod = 'pix' | 'credito' | 'debito' | 'dinheiro';
 
-export function getUnpaidOrdersByTable(orders: Order[], table: string): Order[] {
-  return orders.filter(order => order.table === table && order.paymentStatus !== 'pago');
+export function getPaymentLogsForRestaurant(paymentLogs: PaymentLog[], restaurantId: RestaurantId): PaymentLog[] {
+  return paymentLogs.filter(log => log.restaurantId === restaurantId);
 }
 
-export function createPaymentLog(table: string, unpaidOrders: Order[], paymentMethod: PaymentMethod): PaymentLog {
+export function getUnpaidOrdersByTable(orders: Order[], table: string, restaurantId: RestaurantId): Order[] {
+  return orders.filter(order => order.restaurantId === restaurantId && order.table === table && order.paymentStatus !== 'pago');
+}
+
+export function createPaymentLog(restaurantId: RestaurantId, table: string, unpaidOrders: Order[], paymentMethod: PaymentMethod): PaymentLog {
   return {
     id: `PAY_${Date.now()}_${Math.floor(100 + Math.random() * 900)}`,
+    restaurantId,
     table,
     amount: unpaidOrders.reduce((sum, order) => sum + order.total, 0),
     paymentMethod,
@@ -20,9 +25,9 @@ export function createPaymentLog(table: string, unpaidOrders: Order[], paymentMe
   };
 }
 
-export function checkoutOrders(orders: Order[], table: string, paymentMethod: PaymentMethod): Order[] {
+export function checkoutOrders(orders: Order[], table: string, restaurantId: RestaurantId, paymentMethod: PaymentMethod): Order[] {
   return orders.map(order => {
-    if (order.table === table && order.paymentStatus !== 'pago') {
+    if (order.restaurantId === restaurantId && order.table === table && order.paymentStatus !== 'pago') {
       return {
         ...order,
         paymentStatus: 'pago',
@@ -33,4 +38,8 @@ export function checkoutOrders(orders: Order[], table: string, paymentMethod: Pa
     }
     return order;
   });
+}
+
+export function ensurePaymentLogRestaurantIds(paymentLogs: PaymentLog[], restaurantId: RestaurantId): PaymentLog[] {
+  return paymentLogs.map(log => ({ ...log, restaurantId: log.restaurantId ?? restaurantId }));
 }

@@ -7,10 +7,9 @@ import { ProductModal } from './ProductModal';
 import { CartSidebar } from './CartSidebar';
 import { AnimatePresence, motion } from 'motion/react';
 
-const categories = getMenuCategories();
-
 export const ClientMenu: React.FC = () => {
-  const { products, cart, tableNumber } = useApp();
+  const { activeRestaurantId, products, cart, tableNumber } = useApp();
+  const categories = getMenuCategories(activeRestaurantId);
 
   const [selectedCategory, setSelectedCategory] = useState<string>('todos');
   const [searchQuery, setSearchQuery] = useState<string>('');

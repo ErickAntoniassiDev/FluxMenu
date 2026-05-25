@@ -1,14 +1,20 @@
 import { INITIAL_ORDERS } from '../data';
-import { CartItem, Order, OrderItem, OrderStatus, Product } from '../types';
+import { CartItem, Order, OrderItem, OrderStatus, Product, RestaurantId } from '../types';
 
-export function getOrders(): Order[] {
-  return INITIAL_ORDERS.map(order => ({
-    ...order,
-    items: order.items.map(item => ({ ...item }))
-  }));
+export function getOrders(restaurantId: RestaurantId): Order[] {
+  return INITIAL_ORDERS
+    .filter(order => order.restaurantId === restaurantId)
+    .map(order => ({
+      ...order,
+      items: order.items.map(item => ({ ...item }))
+    }));
 }
 
-export function createOrder(cart: CartItem[], tableNumber: string): Order {
+export function getOrdersForRestaurant(orders: Order[], restaurantId: RestaurantId): Order[] {
+  return orders.filter(order => order.restaurantId === restaurantId);
+}
+
+export function createOrder(cart: CartItem[], tableNumber: string, restaurantId: RestaurantId): Order {
   const orderItems: OrderItem[] = cart.map(item => ({
     productId: item.product.id,
     name: item.product.name,
@@ -34,6 +40,7 @@ export function createOrder(cart: CartItem[], tableNumber: string): Order {
 
   return {
     id: generateOrderId(),
+    restaurantId,
     table: tableNumber,
     items: orderItems,
     status: 'novo',
@@ -46,21 +53,21 @@ export function createOrder(cart: CartItem[], tableNumber: string): Order {
   };
 }
 
-export function updateOrderStatus(orders: Order[], orderId: string, nextStatus: OrderStatus): Order[] {
-  return orders.map(order => order.id === orderId ? {
+export function updateOrderStatus(orders: Order[], orderId: string, restaurantId: RestaurantId, nextStatus: OrderStatus): Order[] {
+  return orders.map(order => order.id === orderId && order.restaurantId === restaurantId ? {
     ...order,
     status: nextStatus,
     updatedAt: new Date().toISOString()
   } : order);
 }
 
-export function archiveOrder(orders: Order[], orderId: string): Order[] {
-  return orders.filter(order => order.id !== orderId);
+export function archiveOrder(orders: Order[], orderId: string, restaurantId: RestaurantId): Order[] {
+  return orders.filter(order => !(order.id === orderId && order.restaurantId === restaurantId));
 }
 
-export function createManualOrder(tables: string[], products: Product[]): Order | null {
+export function createManualOrder(tables: string[], products: Product[], restaurantId: RestaurantId): Order | null {
   const randomTable = tables[Math.floor(Math.random() * tables.length)];
-  const activeProducts = products.filter(product => product.available);
+  const activeProducts = products.filter(product => product.restaurantId === restaurantId && product.available);
   if (!randomTable || activeProducts.length === 0) return null;
 
   const chosenProduct = activeProducts[Math.floor(Math.random() * activeProducts.length)];
@@ -76,6 +83,7 @@ export function createManualOrder(tables: string[], products: Product[]): Order 
 
   return {
     id: generateOrderId(),
+    restaurantId,
     table: randomTable,
     items: randomItems,
     status: 'novo',
@@ -89,6 +97,10 @@ export function createManualOrder(tables: string[], products: Product[]): Order 
 
 export function getCartTotal(cart: CartItem[]): number {
   return cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+}
+
+export function ensureOrderRestaurantIds(orders: Order[], restaurantId: RestaurantId): Order[] {
+  return orders.map(order => ({ ...order, restaurantId: order.restaurantId ?? restaurantId }));
 }
 
 function generateOrderId(): string {

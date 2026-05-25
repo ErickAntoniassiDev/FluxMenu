@@ -32,10 +32,9 @@ const ROLE_COLOR_CLASSES: Record<string, string> = {
   customer: 'bg-slate-800 text-white font-extrabold border border-slate-705 px-2 py-0.5 shadow-sm', // forte e vibrante
 };
 
-const staffUsers = getStaffUsers();
-
 export const Header: React.FC = () => {
   const {
+    activeRestaurantId,
     activeMode,
     setActiveMode,
     restaurantConfig,
@@ -48,6 +47,8 @@ export const Header: React.FC = () => {
     hasPermission,
     isModeAllowed,
   } = useApp();
+
+  const staffUsers = getStaffUsers(activeRestaurantId);
 
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);

@@ -1,13 +1,22 @@
 export type ProductCategory = 'entradas' | 'hamburgueres' | 'pizzas' | 'bebidas' | 'sobremesas';
 export type MenuCategoryFilter = ProductCategory | 'todos';
 
+export type RestaurantId = string;
+
 export interface CategoryOption {
   id: MenuCategoryFilter;
   label: string;
+  restaurantId: RestaurantId;
+}
+
+export interface Restaurant {
+  id: RestaurantId;
+  name: string;
 }
 
 export interface Product {
   id: string;
+  restaurantId: RestaurantId;
   name: string;
   description: string;
   price: number;
@@ -35,6 +44,7 @@ export interface OrderItem {
 
 export interface Order {
   id: string; // e.g. #1024
+  restaurantId: RestaurantId;
   table: string; // e.g. "Mesa 08"
   items: OrderItem[];
   status: OrderStatus;
@@ -49,6 +59,7 @@ export interface Order {
 
 export interface PaymentLog {
   id: string;
+  restaurantId: RestaurantId;
   table: string;
   amount: number;
   paymentMethod: 'pix' | 'credito' | 'debito' | 'dinheiro';
@@ -64,6 +75,7 @@ export interface Toast {
 }
 
 export interface RestaurantConfig {
+  restaurantId: RestaurantId;
   name: string;
   rating: string;
   deliveryEstimate: string;
@@ -76,6 +88,7 @@ export type UserRole = 'owner' | 'manager' | 'kitchen' | 'cashier' | 'waiter' | 
 
 export interface UserSession {
   id: string;
+  restaurantId: RestaurantId;
   name: string;
   role: UserRole;
   email: string;

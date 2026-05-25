@@ -3,6 +3,7 @@ import { UserSession } from '../types';
 export const STAFF_USERS: UserSession[] = [
   {
     id: 'usr_owner',
+    restaurantId: 'rest_gusto',
     name: 'Carlos Santos (Dono)',
     role: 'owner',
     email: 'carlos.flux@restaurante.com',
@@ -10,6 +11,7 @@ export const STAFF_USERS: UserSession[] = [
   },
   {
     id: 'usr_manager',
+    restaurantId: 'rest_gusto',
     name: 'Mariana Silva (Gerente)',
     role: 'manager',
     email: 'mariana.silva@restaurante.com',
@@ -17,6 +19,7 @@ export const STAFF_USERS: UserSession[] = [
   },
   {
     id: 'usr_waiter',
+    restaurantId: 'rest_gusto',
     name: 'Bruno Lima (Garçom)',
     role: 'waiter',
     email: 'bruno.lima@restaurante.com',
@@ -24,6 +27,7 @@ export const STAFF_USERS: UserSession[] = [
   },
   {
     id: 'usr_kitchen',
+    restaurantId: 'rest_gusto',
     name: 'Renan Torres (Cozinha)',
     role: 'kitchen',
     email: 'renan.torres@restaurante.com',
@@ -31,6 +35,7 @@ export const STAFF_USERS: UserSession[] = [
   },
   {
     id: 'usr_cashier',
+    restaurantId: 'rest_gusto',
     name: 'Thiago Costa (Caixa)',
     role: 'cashier',
     email: 'thiago.costa@restaurante.com',
@@ -38,9 +43,34 @@ export const STAFF_USERS: UserSession[] = [
   },
   {
     id: 'usr_customer',
+    restaurantId: 'rest_gusto',
     name: 'Cliente Autoatendimento',
     role: 'customer',
     email: 'cliente@mesa.com',
     avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=120&auto=format&fit=crop'
+  },
+  {
+    id: 'usr_bistro_owner',
+    restaurantId: 'rest_bistro',
+    name: 'Helena Rocha (Dona)',
+    role: 'owner',
+    email: 'helena@bistroaurora.com',
+    avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=120&auto=format&fit=crop'
+  },
+  {
+    id: 'usr_bistro_kitchen',
+    restaurantId: 'rest_bistro',
+    name: 'Mateus Neri (Cozinha)',
+    role: 'kitchen',
+    email: 'mateus@bistroaurora.com',
+    avatar: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?q=80&w=120&auto=format&fit=crop'
+  },
+  {
+    id: 'usr_bistro_cashier',
+    restaurantId: 'rest_bistro',
+    name: 'Paula Reis (Caixa)',
+    role: 'cashier',
+    email: 'paula@bistroaurora.com',
+    avatar: 'https://images.unsplash.com/photo-1551836022-d5d88e9218df?q=80&w=120&auto=format&fit=crop'
   }
 ];
