@@ -3,16 +3,18 @@ import { Lock, LogIn, Store, UserPlus } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 
 export const LoginScreen: React.FC = () => {
-  const { authLoading, authError, login, registerRestaurant } = useApp();
+  const { authLoading, authError, login, registerRestaurant, resendConfirmationEmail } = useApp();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [restaurantName, setRestaurantName] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
+  const [localSuccess, setLocalSuccess] = useState<string | null>(null);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setLocalError(null);
+    setLocalSuccess(null);
     if (!email.trim()) return setLocalError('Informe o email.');
     if (!password) return setLocalError('Informe a senha.');
     if (mode === 'register' && !restaurantName.trim()) return setLocalError('Informe o nome do restaurante.');
@@ -26,6 +28,19 @@ export const LoginScreen: React.FC = () => {
       }
     } catch (error) {
       setLocalError(error instanceof Error ? error.message : mode === 'register' ? 'Não foi possível criar a conta.' : 'Não foi possível entrar.');
+    }
+  };
+
+
+  const handleResendConfirmation = async () => {
+    setLocalError(null);
+    setLocalSuccess(null);
+    if (!email.trim()) return setLocalError('Informe o email para reenviar a confirmação.');
+    try {
+      await resendConfirmationEmail(email.trim());
+      setLocalSuccess('Email de confirmação reenviado. Verifique sua caixa de entrada.');
+    } catch (error) {
+      setLocalError(error instanceof Error ? error.message : 'Não foi possível reenviar a confirmação.');
     }
   };
 
@@ -66,6 +81,12 @@ export const LoginScreen: React.FC = () => {
         {(localError || authError) && (
           <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold">
             {localError || authError}
+          </div>
+        )}
+
+        {localSuccess && (
+          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold">
+            {localSuccess}
           </div>
         )}
 
@@ -111,6 +132,15 @@ export const LoginScreen: React.FC = () => {
         >
           {mode === 'register' ? <UserPlus className="w-4 h-4" /> : <LogIn className="w-4 h-4" />}
           {authLoading ? (mode === 'register' ? 'Criando...' : 'Entrando...') : (mode === 'register' ? 'Criar e Acessar' : 'Entrar')}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => void handleResendConfirmation()}
+          disabled={authLoading}
+          className="w-full text-[10px] font-black uppercase text-slate-500 hover:text-red-600 disabled:opacity-60"
+        >
+          Reenviar email de confirmação
         </button>
       </form>
     </div>

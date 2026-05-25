@@ -18,6 +18,7 @@ interface AppContextType {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   registerRestaurant: (email: string, password: string, restaurantName: string) => Promise<void>;
+  resendConfirmationEmail: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   currentPlan: SaaSPlan;
   currentPlanId: SaaSPlanId;
@@ -190,6 +191,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast('Restaurante criado com sucesso. Bem-vindo ao FluxMenu!', 'success');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Falha ao criar conta.';
+      setAuthError(message);
+      throw error;
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+
+  const resendConfirmationEmail = async (email: string) => {
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      await AuthService.resendConfirmationEmail(email);
+      addToast('Email de confirmação reenviado.', 'success');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Falha ao reenviar confirmação.';
       setAuthError(message);
       throw error;
     } finally {
@@ -777,6 +794,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isAuthenticated,
       login,
       registerRestaurant,
+      resendConfirmationEmail,
       logout,
       currentPlan,
       currentPlanId,

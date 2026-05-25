@@ -100,6 +100,30 @@ export function getStoredAuthSession(): SupabaseAuthSession | null {
 }
 
 
+
+export async function resendSignupConfirmation(email: string): Promise<void> {
+  const baseUrl = getSupabaseBaseUrl();
+  const response = await fetch(baseUrl + '/auth/v1/resend', {
+    method: 'POST',
+    headers: {
+      apikey: supabaseAnonKey,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ type: 'signup', email })
+  });
+
+  if (!response.ok) {
+    let message = 'Não foi possível reenviar o email de confirmação.';
+    try {
+      const payload = await response.json() as { error?: string; error_description?: string; msg?: string; message?: string };
+      message = payload.error_description ?? payload.message ?? payload.msg ?? payload.error ?? message;
+    } catch {
+      // Keep the generic message when Supabase does not return a JSON error body.
+    }
+    throw new Error(message);
+  }
+}
+
 export async function signUpWithPassword(email: string, password: string): Promise<SupabaseAuthSession> {
   const baseUrl = getSupabaseBaseUrl();
   const response = await fetch(baseUrl + '/auth/v1/signup', {

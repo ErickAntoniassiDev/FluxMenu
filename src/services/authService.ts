@@ -1,4 +1,4 @@
-import { getStoredAuthSession, refreshStoredAuthSession, signInWithPassword, signOutFromSupabase, signUpWithPassword, SupabaseAuthSession } from '../lib/supabase/client';
+import { getStoredAuthSession, refreshStoredAuthSession, signInWithPassword, signOutFromSupabase, signUpWithPassword, resendSignupConfirmation, SupabaseAuthSession } from '../lib/supabase/client';
 import * as MemberRepository from '../repositories/supabase/memberSupabaseRepository';
 import * as OnboardingRepository from '../repositories/supabase/onboardingSupabaseRepository';
 import { RestaurantId, UserSession } from '../types';
@@ -25,6 +25,11 @@ export async function restoreSession(): Promise<SupabaseAuthSession | null> {
   return refreshStoredAuthSession();
 }
 
+
+
+export async function resendConfirmationEmail(email: string): Promise<void> {
+  await resendSignupConfirmation(email);
+}
 
 export async function registerRestaurant(input: RegisterRestaurantInput): Promise<RegisterRestaurantResult> {
   const session = await signUpWithPassword(input.email, input.password);
