@@ -1,13 +1,9 @@
-import { INITIAL_ORDERS } from '../data';
+import * as OrderRepository from '../repositories/orderRepository';
 import { CartItem, Order, OrderItem, OrderStatus, Product, RestaurantId } from '../types';
 
 export function getOrders(restaurantId: RestaurantId): Order[] {
-  return INITIAL_ORDERS
-    .filter(order => order.restaurantId === restaurantId)
-    .map(order => ({
-      ...order,
-      items: order.items.map(item => ({ ...item }))
-    }));
+  return OrderRepository.findInitialOrders()
+    .filter(order => order.restaurantId === restaurantId);
 }
 
 export function getOrdersForRestaurant(orders: Order[], restaurantId: RestaurantId): Order[] {

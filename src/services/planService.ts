@@ -1,29 +1,24 @@
-import { DEFAULT_PLAN_ID, SAAS_PLANS } from '../data/plans';
+import * as PlanRepository from '../repositories/planRepository';
 import { SaaSFeature, SaaSLimit, SaaSPlan, SaaSPlanId } from '../types';
 
-export function getPlans(): SaaSPlan[] {
-  return Object.values(SAAS_PLANS).map(plan => ({
-    ...plan,
-    features: { ...plan.features },
-    limits: { ...plan.limits }
-  }));
+export function getDefaultPlanId(): SaaSPlanId {
+  return PlanRepository.findDefaultPlanId();
 }
 
-export function getPlan(planId: SaaSPlanId = DEFAULT_PLAN_ID): SaaSPlan {
-  const plan = SAAS_PLANS[planId] ?? SAAS_PLANS[DEFAULT_PLAN_ID];
-  return {
-    ...plan,
-    features: { ...plan.features },
-    limits: { ...plan.limits }
-  };
+export function getPlans(): SaaSPlan[] {
+  return PlanRepository.findAllPlans();
+}
+
+export function getPlan(planId: SaaSPlanId = getDefaultPlanId()): SaaSPlan {
+  return PlanRepository.findPlanById(planId) ?? PlanRepository.findPlanById(getDefaultPlanId())!;
 }
 
 export function canUseFeature(planId: SaaSPlanId, feature: SaaSFeature): boolean {
-  return !!SAAS_PLANS[planId]?.features[feature];
+  return !!PlanRepository.findPlanById(planId)?.features[feature];
 }
 
 export function getPlanLimit(planId: SaaSPlanId, limit: SaaSLimit): number {
-  return SAAS_PLANS[planId]?.limits[limit] ?? SAAS_PLANS[DEFAULT_PLAN_ID].limits[limit];
+  return PlanRepository.findPlanById(planId)?.limits[limit] ?? getPlan(getDefaultPlanId()).limits[limit];
 }
 
 export function isUnlimitedLimit(value: number): boolean {

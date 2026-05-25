@@ -1,14 +1,15 @@
-import { STAFF_USERS } from '../mock/users';
+import * as UserRepository from '../repositories/userRepository';
 import { RestaurantId, UserSession } from '../types';
 
 export function getStaffUsers(restaurantId: RestaurantId): UserSession[] {
-  return STAFF_USERS
+  return UserRepository.findAllStaffUsers()
     .filter(user => user.restaurantId === restaurantId)
     .map(user => ({ ...user }));
 }
 
 export function getDefaultUser(restaurantId: RestaurantId): UserSession {
-  const user = STAFF_USERS.find(current => current.restaurantId === restaurantId) ?? STAFF_USERS[0];
+  const users = UserRepository.findAllStaffUsers();
+  const user = users.find(current => current.restaurantId === restaurantId) ?? users[0];
   return { ...user };
 }
 

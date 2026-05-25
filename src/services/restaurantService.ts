@@ -1,13 +1,36 @@
-import { RESTAURANT_PROFILES } from '../data';
-import { RESTAURANTS } from '../data/restaurants';
-import { RestaurantConfig, RestaurantId } from '../types';
+import * as RestaurantRepository from '../repositories/restaurantRepository';
+import * as RestaurantSupabaseRepository from '../repositories/supabase/restaurantSupabaseRepository';
+import { Restaurant, RestaurantConfig, RestaurantId } from '../types';
+
+let restaurantsCache: Restaurant[] | null = null;
+let restaurantProfilesCache: RestaurantConfig[] | null = null;
+
+export function getDefaultRestaurantId(): RestaurantId {
+  return RestaurantRepository.findDefaultRestaurantId();
+}
 
 export function getRestaurantProfile(restaurantId: RestaurantId): RestaurantConfig {
-  return { ...(RESTAURANT_PROFILES.find(profile => profile.restaurantId === restaurantId) ?? RESTAURANT_PROFILES[0]) };
+  const profiles = restaurantProfilesCache ?? RestaurantRepository.findAllRestaurantProfiles();
+  return { ...(profiles.find(profile => profile.restaurantId === restaurantId) ?? profiles[0]) };
 }
 
 export function getRestaurantProfiles(): RestaurantConfig[] {
-  return RESTAURANT_PROFILES.map(profile => ({ ...profile }));
+  return (restaurantProfilesCache ?? RestaurantRepository.findAllRestaurantProfiles()).map(profile => ({ ...profile }));
+}
+
+export async function getRestaurantProfilesWithFallback(): Promise<RestaurantConfig[]> {
+  try {
+    const profiles = await RestaurantSupabaseRepository.findAllRestaurantProfiles();
+    if (profiles.length > 0) {
+      restaurantProfilesCache = profiles;
+      return getRestaurantProfiles();
+    }
+  } catch (error) {
+    console.warn('Supabase restaurant settings read failed. Falling back to local data.', error);
+  }
+
+  restaurantProfilesCache = null;
+  return getRestaurantProfiles();
 }
 
 export function getRestaurantConfigForActive(configs: RestaurantConfig[], restaurantId: RestaurantId): RestaurantConfig {
@@ -20,6 +43,21 @@ export function updateRestaurantConfig(configs: RestaurantConfig[], updated: Res
   return configs.map(config => config.restaurantId === updated.restaurantId ? updated : config);
 }
 
-export function getRestaurants() {
-  return RESTAURANTS.map(restaurant => ({ ...restaurant }));
+export function getRestaurants(): Restaurant[] {
+  return (restaurantsCache ?? RestaurantRepository.findAllRestaurants()).map(restaurant => ({ ...restaurant }));
+}
+
+export async function getRestaurantsWithFallback(): Promise<Restaurant[]> {
+  try {
+    const restaurants = await RestaurantSupabaseRepository.findAllRestaurants();
+    if (restaurants.length > 0) {
+      restaurantsCache = restaurants;
+      return getRestaurants();
+    }
+  } catch (error) {
+    console.warn('Supabase restaurants read failed. Falling back to local data.', error);
+  }
+
+  restaurantsCache = null;
+  return getRestaurants();
 }

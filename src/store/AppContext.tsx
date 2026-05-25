@@ -7,8 +7,6 @@ import * as PaymentService from '../services/paymentService';
 import * as RestaurantService from '../services/restaurantService';
 import * as TableService from '../services/tableService';
 import { getDefaultUser } from '../services/userService';
-import { getDefaultRestaurantId } from '../data';
-import { DEFAULT_PLAN_ID } from '../data/plans';
 import * as PlanService from '../services/planService';
 
 interface AppContextType {
@@ -94,10 +92,10 @@ function getSavedTablesByRestaurant(defaultRestaurantId: RestaurantId): TablesBy
 }
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const defaultRestaurantId = getDefaultRestaurantId();
+  const defaultRestaurantId = RestaurantService.getDefaultRestaurantId();
   const [currentPlanId, setCurrentPlanIdState] = useState<SaaSPlanId>(() => {
     const saved = localStorage.getItem('flux_current_plan_id') as SaaSPlanId | null;
-    return saved || DEFAULT_PLAN_ID;
+    return saved || PlanService.getDefaultPlanId();
   });
   const currentPlan = useMemo(() => PlanService.getPlan(currentPlanId), [currentPlanId]);
 
@@ -183,6 +181,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = readJson<PaymentLog[]>('flux_payment_logs');
     return saved ? PaymentService.ensurePaymentLogRestaurantIds(saved, defaultRestaurantId) : [];
   });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function hydrateSupabaseReads() {
+      const [, remoteProfiles, remoteProducts] = await Promise.all([
+        RestaurantService.getRestaurantsWithFallback(),
+        RestaurantService.getRestaurantProfilesWithFallback(),
+        CatalogService.getAllProductsWithFallback()
+      ]);
+
+      if (cancelled) return;
+
+      setRestaurantConfigs(prev => mergeConfigsByRestaurantId(prev, remoteProfiles));
+      setAllProducts(prev => mergeByRestaurantIdAndId(prev, CatalogService.ensureProductRestaurantIds(remoteProducts, defaultRestaurantId)));
+    }
+
+    hydrateSupabaseReads().catch(error => {
+      console.warn('Supabase bootstrap failed. Keeping local data.', error);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [defaultRestaurantId]);
 
   const restaurantConfig = useMemo(() => RestaurantService.getRestaurantConfigForActive(restaurantConfigs, activeRestaurantId), [restaurantConfigs, activeRestaurantId]);
   const products = useMemo(() => CatalogService.getProductsForRestaurant(allProducts, activeRestaurantId), [allProducts, activeRestaurantId]);

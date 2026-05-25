@@ -1,8 +1,8 @@
-import { DEFAULT_TABLES } from '../data/tables';
+import * as TableRepository from '../repositories/tableRepository';
 import { RestaurantId } from '../types';
 
 export function getTables(restaurantId: RestaurantId): string[] {
-  return [...(DEFAULT_TABLES.find(group => group.restaurantId === restaurantId)?.tables ?? [])];
+  return [...(TableRepository.findAllRestaurantTables().find(group => group.restaurantId === restaurantId)?.tables ?? [])];
 }
 
 export function addTable(tables: string[], table: string): string[] {
