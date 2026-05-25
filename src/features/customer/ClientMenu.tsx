@@ -1,10 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../../store/AppContext';
 import { Product } from '../../types';
+import { getMenuCategories } from '../../services/catalogService';
 import { ShoppingCart, Search } from 'lucide-react';
 import { ProductModal } from './ProductModal';
 import { CartSidebar } from './CartSidebar';
 import { AnimatePresence, motion } from 'motion/react';
+
+const categories = getMenuCategories();
 
 export const ClientMenu: React.FC = () => {
   const { products, cart, tableNumber } = useApp();
@@ -14,15 +17,6 @@ export const ClientMenu: React.FC = () => {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
 
-  // Filter Categories list
-  const categories = [
-    { id: 'todos', label: 'Tudo' },
-    { id: 'entradas', label: 'Entradas' },
-    { id: 'hamburgueres', label: 'Hambúrgueres' },
-    { id: 'pizzas', label: 'Pizzas' },
-    { id: 'bebidas', label: 'Bebidas' },
-    { id: 'sobremesas', label: 'Sobremesas' }
-  ];
 
   // Live filter catalog products based on search queries and categories
   const filteredProducts = useMemo(() => {

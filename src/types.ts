@@ -1,9 +1,17 @@
+export type ProductCategory = 'entradas' | 'hamburgueres' | 'pizzas' | 'bebidas' | 'sobremesas';
+export type MenuCategoryFilter = ProductCategory | 'todos';
+
+export interface CategoryOption {
+  id: MenuCategoryFilter;
+  label: string;
+}
+
 export interface Product {
   id: string;
   name: string;
   description: string;
   price: number;
-  category: 'entradas' | 'hamburgueres' | 'pizzas' | 'bebidas' | 'sobremesas';
+  category: ProductCategory;
   image: string;
   prepTimeMinutes: number; // estimated preparation time
   available?: boolean;

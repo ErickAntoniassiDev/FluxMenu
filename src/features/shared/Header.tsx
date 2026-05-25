@@ -12,7 +12,7 @@ import {
   ChevronDown, 
   User,
 } from 'lucide-react';
-import { STAFF_USERS } from '../../utils/rbac';
+import { getStaffUsers } from '../../services/userService';
 
 const ROLE_LABEL_PT: Record<string, string> = {
   owner: 'Dono (Owner)',
@@ -31,6 +31,8 @@ const ROLE_COLOR_CLASSES: Record<string, string> = {
   waiter: 'bg-slate-950 text-white font-extrabold border border-slate-900 px-2 py-0.5 shadow-sm', // fundo azul usar preto, forte
   customer: 'bg-slate-800 text-white font-extrabold border border-slate-705 px-2 py-0.5 shadow-sm', // forte e vibrante
 };
+
+const staffUsers = getStaffUsers();
 
 export const Header: React.FC = () => {
   const {
@@ -266,7 +268,7 @@ export const Header: React.FC = () => {
 
                 {/* Dropdown Options List */}
                 <div className="max-h-72 overflow-y-auto divide-y divide-slate-50">
-                  {STAFF_USERS.map((user) => {
+                  {staffUsers.map((user) => {
                     const isSelected = user.id === currentUser.id;
                     return (
                       <button

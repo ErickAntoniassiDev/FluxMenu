@@ -1,7 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Product, CartItem, Order, OrderStatus, Toast, OrderItem, RestaurantConfig, PaymentLog, UserSession, RolePermissionConfig } from '../types';
-import { MENU_PRODUCTS, INITIAL_ORDERS, RESTAURANT_PROFILE } from '../data';
-import { STAFF_USERS, ROLE_PERMISSIONS } from '../utils/rbac';
+import { Product, CartItem, Order, OrderStatus, Toast, RestaurantConfig, PaymentLog, UserSession, RolePermissionConfig } from '../types';
+import { ROLE_PERMISSIONS } from '../utils/rbac';
+import * as CatalogService from '../services/catalogService';
+import * as OrderService from '../services/orderService';
+import * as PaymentService from '../services/paymentService';
+import * as RestaurantService from '../services/restaurantService';
+import * as TableService from '../services/tableService';
+import { getDefaultUser } from '../services/userService';
 
 interface AppContextType {
   products: Product[];
@@ -61,7 +66,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (saved) {
       try { return JSON.parse(saved); } catch (e) { console.error(e); }
     }
-    return STAFF_USERS[0];
+    return getDefaultUser();
   });
 
   useEffect(() => {
@@ -135,7 +140,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (saved) {
       try { return JSON.parse(saved); } catch (e) { console.error(e); }
     }
-    return RESTAURANT_PROFILE;
+    return RestaurantService.getRestaurantProfile();
   });
 
   const setRestaurantConfig = (config: RestaurantConfig) => {
@@ -158,7 +163,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.error("Error parsing saved products", e);
       }
     }
-    return MENU_PRODUCTS.map(p => ({ ...p, available: true }));
+    return CatalogService.getProducts();
   });
 
   useEffect(() => {
@@ -171,7 +176,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (saved) {
       try { return JSON.parse(saved); } catch (e) { console.error(e); }
     }
-    return ['Mesa 01', 'Mesa 02', 'Mesa 03', 'Mesa 04', 'Mesa 05', 'Mesa 08', 'Mesa 12', 'Mesa 15', 'Mesa VIP'];
+    return TableService.getTables();
   });
 
   useEffect(() => {
@@ -194,7 +199,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (saved) {
       try { return JSON.parse(saved); } catch (e) { console.error(e); }
     }
-    return INITIAL_ORDERS;
+    return OrderService.getOrders();
   });
 
   useEffect(() => {
@@ -254,49 +259,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const getCartTotal = () => {
-    return cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+    return OrderService.getCartTotal(cart);
   };
 
   // Confirm and submit order to kitchen
   const confirmOrder = async (onSuccess?: () => void) => {
     if (cart.length === 0) return;
 
-    const orderItems: OrderItem[] = cart.map(item => ({
-      productId: item.product.id,
-      name: item.product.name,
-      quantity: item.quantity,
-      observation: item.observation,
-      price: item.product.price
-    }));
-
-    // Find custom urgency keywords
-    let finalPriority: 'baixa' | 'media' | 'alta' | 'urgente' = 'media';
-    const hasSevereNeeds = cart.some(item => 
-      item.observation.toLowerCase().includes('alergia') || 
-      item.observation.toLowerCase().includes('alergi') ||
-      item.observation.toLowerCase().includes('restrição') ||
-      item.observation.toLowerCase().includes('infantil') ||
-      item.observation.toLowerCase().includes('criança')
-    );
-
-    if (hasSevereNeeds) {
-      finalPriority = 'urgente';
-    } else if (orderItems.some(i => i.quantity >= 3)) {
-      finalPriority = 'alta';
-    }
-
-    const newOrder: Order = {
-      id: `#${Math.floor(1000 + Math.random() * 9000).toString()}`,
-      table: tableNumber,
-      items: orderItems,
-      status: 'novo',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      total: getCartTotal(),
-      priority: finalPriority,
-      notes: hasSevereNeeds ? "⚠️ Alertas críticos informados nas observações." : "",
-      paymentStatus: 'pendente'
-    };
+    const newOrder = OrderService.createOrder(cart, tableNumber);
 
     setOrders(prev => [newOrder, ...prev]);
     setCart([]);
@@ -311,23 +281,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    setOrders(prev => prev.map(order => {
-      if (order.id === orderId) {
-        let desc = '';
-        if (nextStatus === 'preparo') desc = 'em preparo';
-        if (nextStatus === 'pronto') desc = 'marcado como pronto!';
-        if (nextStatus === 'entregue') desc = 'entregue com sucesso!';
-        
-        addToast(`Pedido ${orderId} (${order.table}) agora está ${desc}`, 'info');
+    const currentOrder = orders.find(order => order.id === orderId);
+    let desc = '';
+    if (nextStatus === 'preparo') desc = 'em preparo';
+    if (nextStatus === 'pronto') desc = 'marcado como pronto!';
+    if (nextStatus === 'entregue') desc = 'entregue com sucesso!';
 
-        return {
-          ...order,
-          status: nextStatus,
-          updatedAt: new Date().toISOString()
-        };
-      }
-      return order;
-    }));
+    if (currentOrder) {
+      addToast(`Pedido ${orderId} (${currentOrder.table}) agora está ${desc}`, 'info');
+    }
+
+    setOrders(prev => OrderService.updateOrderStatus(prev, orderId, nextStatus));
   };
 
   const archiveOrder = (orderId: string) => {
@@ -335,7 +299,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast("Operação de produção (KDS) não autorizada para seu nível de acesso!", "warning");
       return;
     }
-    setOrders(prev => prev.filter(o => o.id !== orderId));
+    setOrders(prev => OrderService.archiveOrder(prev, orderId));
     addToast(`Pedido ${orderId} arquivado do painel`, 'warning');
   };
 
@@ -353,7 +317,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast("Operação não autorizada para seu nível de acesso!", "warning");
       return;
     }
-    setOrders(INITIAL_ORDERS);
+    setOrders(OrderService.getOrders());
     addToast('Pedidos redefinidos para os originais de fábrica', 'success');
   };
 
@@ -363,36 +327,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast("Apenas administradores e gerentes podem registrar novas entradas manuais!", "warning");
       return;
     }
-    const randomTable = tables[Math.floor(Math.random() * tables.length)];
-    // pick 1-2 random products from active ones
-    const activeProducts = products.filter(p => p.available);
-    if (activeProducts.length === 0) return;
-
-    const chosenProduct = activeProducts[Math.floor(Math.random() * activeProducts.length)];
-    const randomItems: OrderItem[] = [
-      {
-        productId: chosenProduct.id,
-        name: chosenProduct.name,
-        quantity: Math.floor(Math.random() * 2) + 1,
-        observation: Math.random() > 0.6 ? "Sem cebola / Ponto médio" : "",
-        price: chosenProduct.price
-      }
-    ];
-
-    const randomOrder: Order = {
-      id: `#${Math.floor(1000 + Math.random() * 9000).toString()}`,
-      table: randomTable,
-      items: randomItems,
-      status: 'novo',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      total: randomItems.reduce((acc, i) => acc + (i.price * i.quantity), 0),
-      priority: Math.random() > 0.75 ? 'alta' : 'media',
-      notes: ""
-    };
+    const randomOrder = OrderService.createManualOrder(tables, products);
+    if (!randomOrder) return;
 
     setOrders(prev => [randomOrder, ...prev]);
-    addToast(`🔔 Novo pedido ${randomOrder.id} recebido na ${randomTable}`, 'info');
+    addToast(`🔔 Novo pedido ${randomOrder.id} recebido na ${randomOrder.table}`, 'info');
   };
 
   // Admin Catalog Management
@@ -401,7 +340,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast("Apenas gestores com permissão de edição de catálogo podem alterar produtos!", "warning");
       return;
     }
-    setProducts(prev => prev.map(p => p.id === updated.id ? updated : p));
+    setProducts(prev => CatalogService.updateProduct(prev, updated));
     addToast(`Produto "${updated.name}" atualizado com sucesso!`, 'success');
   };
 
@@ -410,8 +349,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast("Apenas gestores com permissão de edição de catálogo podem adicionar produtos!", "warning");
       return;
     }
-    const id = 'p_' + Date.now().toString();
-    setProducts(prev => [...prev, { ...newProd, id, available: true }]);
+    setProducts(prev => CatalogService.addProduct(prev, newProd));
     addToast(`Novo produto "${newProd.name}" adicionado ao cardápio!`, 'success');
   };
 
@@ -420,7 +358,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast("Apenas gestores com permissão de edição de catálogo podem remover produtos!", "warning");
       return;
     }
-    setProducts(prev => prev.filter(p => p.id !== id));
+    setProducts(prev => CatalogService.deleteProduct(prev, id));
     addToast("Produto removido do cardápio", "warning");
   };
 
@@ -433,7 +371,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast("Esta mesa já existe!", "warning");
       return;
     }
-    setTables(prev => [...prev, num].sort());
+    setTables(prev => TableService.addTable(prev, num));
     addToast(`${num} cadastrada com sucesso`, 'success');
   };
 
@@ -442,7 +380,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast("Operação de mesas não autorizada para seu nível de acesso!", "warning");
       return;
     }
-    setTables(prev => prev.filter(t => t !== num));
+    setTables(prev => TableService.deleteTable(prev, num));
     addToast(`${num} removida do sistema`, 'warning');
   };
 
@@ -465,40 +403,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    // Find all active/pending unpaid orders of this table
-    const unpaidOrders = orders.filter(o => o.table === table && o.paymentStatus !== 'pago');
+    const unpaidOrders = PaymentService.getUnpaidOrdersByTable(orders, table);
     if (unpaidOrders.length === 0) {
       addToast(`A ${table} não possui faturas pendentes de pagamento!`, 'warning');
       return;
     }
 
-    const totalAmount = unpaidOrders.reduce((sum, order) => sum + order.total, 0);
-    const totalItemsCount = unpaidOrders.reduce((sum, order) => 
-      sum + order.items.reduce((ordersSum, item) => ordersSum + item.quantity, 0), 0
-    );
+    const newLog = PaymentService.createPaymentLog(table, unpaidOrders, paymentMethod);
+    const totalAmount = newLog.amount;
 
-    const newLog: PaymentLog = {
-      id: `PAY_${Date.now()}_${Math.floor(100 + Math.random() * 900)}`,
-      table,
-      amount: totalAmount,
-      paymentMethod,
-      timestamp: new Date().toISOString(),
-      itemsCount: totalItemsCount,
-      orders: unpaidOrders.map(o => o.id)
-    };
-
-    setOrders(prev => prev.map(order => {
-      if (order.table === table && order.paymentStatus !== 'pago') {
-        return {
-          ...order,
-          paymentStatus: 'pago',
-          paymentMethod,
-          status: 'entregue', // Checkout closes table loop
-          updatedAt: new Date().toISOString()
-        };
-      }
-      return order;
-    }));
+    setOrders(prev => PaymentService.checkoutOrders(prev, table, paymentMethod));
 
     setPaymentLogs(prev => [newLog, ...prev]);
 

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../../store/AppContext';
 import { Product } from '../../types';
+import { getProductCategories } from '../../services/catalogService';
 import { 
   DollarSign, 
   Layers, 
@@ -20,6 +21,8 @@ import {
   X,
   Clock
 } from 'lucide-react';
+
+const productCategories = getProductCategories();
 
 export const AdminPanel: React.FC = () => {
   const {
@@ -557,11 +560,9 @@ export const AdminPanel: React.FC = () => {
                     onChange={(e) => setEditingProduct({ ...editingProduct, category: e.target.value as any })}
                     className="w-full p-2.5 border border-slate-205 bg-slate-50 rounded-lg text-xs outline-hidden focus:border-red-650 text-slate-900"
                   >
-                    <option value="entradas">Entradas</option>
-                    <option value="hamburgueres">Hambúrgueres</option>
-                    <option value="pizzas">Pizzas</option>
-                    <option value="bebidas">Bebidas</option>
-                    <option value="sobremesas">Sobremesas</option>
+                    {productCategories.map(category => (
+                      <option key={category.id} value={category.id}>{category.label}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -668,11 +669,9 @@ export const AdminPanel: React.FC = () => {
                     className="w-full p-2.5 border border-slate-205 bg-slate-50 rounded-lg text-xs outline-hidden focus:border-red-650 font-bold font-black text-slate-900"
                     id="add-prod-select-category"
                   >
-                    <option value="entradas">Entradas</option>
-                    <option value="hamburgueres">Hambúrgueres</option>
-                    <option value="pizzas">Pizzas</option>
-                    <option value="bebidas">Bebidas</option>
-                    <option value="sobremesas">Sobremesas</option>
+                    {productCategories.map(category => (
+                      <option key={category.id} value={category.id}>{category.label}</option>
+                    ))}
                   </select>
                 </div>
 
