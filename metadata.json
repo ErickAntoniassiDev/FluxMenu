@@ -1,6 +1,5 @@
 {
-  "name": "Sistema de Pedidos e Cozinha",
-  "description": "Sistema completo de autoatendimento e painel de cozinha integrado em tempo real para restaurantes baseados no mercado brasileiro.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "name": "FluxMenu",
+  "description": "Sistema de cardápio digital, autoatendimento, cozinha, caixa e gestão administrativa para restaurantes.",
+  "requestFramePermissions": []
 }

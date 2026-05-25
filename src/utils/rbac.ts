@@ -8,7 +8,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionConfig> = {
     canManageTables: true,
     canProcessCheckout: true,
     canUpdateKDS: true,
-    canSimulateOrders: true,
+    canCreateManualOrders: true,
     canOrderForAnyTable: true,
   },
   manager: {
@@ -18,7 +18,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionConfig> = {
     canManageTables: true,
     canProcessCheckout: true,
     canUpdateKDS: true,
-    canSimulateOrders: true,
+    canCreateManualOrders: true,
     canOrderForAnyTable: true,
   },
   kitchen: {
@@ -28,7 +28,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionConfig> = {
     canManageTables: false,
     canProcessCheckout: false,
     canUpdateKDS: true,
-    canSimulateOrders: false,
+    canCreateManualOrders: false,
     canOrderForAnyTable: false,
   },
   cashier: {
@@ -38,7 +38,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionConfig> = {
     canManageTables: false,
     canProcessCheckout: true,
     canUpdateKDS: false,
-    canSimulateOrders: false,
+    canCreateManualOrders: false,
     canOrderForAnyTable: false,
   },
   waiter: {
@@ -48,7 +48,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionConfig> = {
     canManageTables: false,
     canProcessCheckout: false,
     canUpdateKDS: true,
-    canSimulateOrders: false,
+    canCreateManualOrders: false,
     canOrderForAnyTable: true,
   },
   customer: {
@@ -58,12 +58,12 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionConfig> = {
     canManageTables: false,
     canProcessCheckout: false,
     canUpdateKDS: false,
-    canSimulateOrders: false,
+    canCreateManualOrders: false,
     canOrderForAnyTable: false,
   },
 };
 
-export const MOCK_USERS: UserSession[] = [
+export const STAFF_USERS: UserSession[] = [
   { 
     id: 'usr_owner', 
     name: 'Carlos Santos (Dono)', 

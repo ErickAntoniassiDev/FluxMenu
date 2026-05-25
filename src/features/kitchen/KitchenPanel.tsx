@@ -7,7 +7,7 @@ export const KitchenPanel: React.FC = () => {
   const {
     orders,
     clearAllOrders,
-    resetMockOrders,
+    resetInitialOrders,
     tick
   } = useApp();
 
@@ -137,10 +137,10 @@ export const KitchenPanel: React.FC = () => {
         {/* Right DB triggers */}
         <div className="flex gap-2">
           <button
-            onClick={resetMockOrders}
+            onClick={resetInitialOrders}
             className="p-2 border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition cursor-pointer select-none"
-            title="Redefinir pedidos para os de demonstração"
-            id="kds-btn-reset-demo"
+            title="Restaurar pedidos iniciais do turno"
+            id="kds-btn-reset-orders"
           >
             <RefreshCcw className="w-4 h-4" />
           </button>
@@ -175,7 +175,7 @@ export const KitchenPanel: React.FC = () => {
                 <div className="h-44 flex flex-col items-center justify-center text-center text-slate-600">
                   <div className="text-2xl mb-1.5">🛌</div>
                   <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block">Sem pedidos</span>
-                  <p className="text-[9px] text-slate-600 max-w-[150px] leading-relaxed mt-0.5">Use "Simular Entrada" no topo para testar.</p>
+                  <p className="text-[9px] text-slate-600 max-w-[150px] leading-relaxed mt-0.5">Novos pedidos aparecerão aqui conforme forem enviados.</p>
                 </div>
               ) : (
                 columnNew.map(order => (

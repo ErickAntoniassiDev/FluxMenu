@@ -81,6 +81,6 @@ export interface RolePermissionConfig {
   canManageTables: boolean;
   canProcessCheckout: boolean;
   canUpdateKDS: boolean;
-  canSimulateOrders: boolean;
+  canCreateManualOrders: boolean;
   canOrderForAnyTable: boolean;
 }

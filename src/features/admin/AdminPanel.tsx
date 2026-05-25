@@ -389,13 +389,13 @@ export const AdminPanel: React.FC = () => {
 
                   {/* Vermelho no Rosa */}
                   <div className="p-3.5 rounded-xl bg-slate-100 border text-[10.5px] leading-relaxed text-slate-500 space-y-2 font-semibold">
-                    <p>🔗 <strong>Simular escaneamento QR:</strong></p>
+                    <p>🔗 <strong>Link de acesso por QR:</strong></p>
                     <a
                       href={`${window.location.origin}/#/client?mesa=${selectedQRTable.replace(' ', '')}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-[9.5px] block p-2 bg-white hover:bg-slate-50 rounded border select-all truncate font-mono text-red-650 font-black uppercase underline decoration-red-600/30 transition hover:text-red-750 cursor-pointer"
-                      title="Clique para simular a leitura do QR Code abrindo o cardápio desta mesa em uma nova aba"
+                      title="Clique para abrir o cardápio desta mesa em uma nova aba"
                     >
                       {window.location.origin}/#/client?mesa={selectedQRTable.replace(' ', '')}
                     </a>
@@ -404,7 +404,7 @@ export const AdminPanel: React.FC = () => {
                 </div>
 
                 {/* Styled Print QR Code card element - Vermelho no Rosa e Fundo Azul Usar Preto */}
-                <div className="p-6 bg-black rounded-2xl flex flex-col items-center text-center shadow-xl select-none" id="simulated-qr-card-print border border-slate-800">
+                <div className="p-6 bg-black rounded-2xl flex flex-col items-center text-center shadow-xl select-none" id="qr-card-print border border-slate-800">
                   <span className="text-[9px] font-black uppercase tracking-widest text-red-500 leading-none mb-1">
                     FluxMenu • {restaurantConfig.name}
                   </span>
@@ -412,7 +412,7 @@ export const AdminPanel: React.FC = () => {
                     {selectedQRTable}
                   </span>
 
-                  {/* Vectors generated code block representation */}
+                  {/* QR code preview */}
                   <div className="p-4 bg-white rounded-xl shadow-md flex items-center justify-center shrink-0">
                     <div className="w-28 h-28 border border-slate-100 flex items-center justify-center relative">
                       <QrCode className="w-24 h-24 text-slate-900" />
@@ -427,7 +427,7 @@ export const AdminPanel: React.FC = () => {
                   </span>
 
                   <button
-                    onClick={() => alert(`Simulando impressão térmica de adesivo de mesa para o ${selectedQRTable}...`)}
+                    onClick={() => alert(`Preparando impressão térmica de adesivo de mesa para o ${selectedQRTable}...`)}
                     className="w-full h-9 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[10px] font-black uppercase transition mt-4 flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     Imprimir Adesivo
@@ -566,7 +566,7 @@ export const AdminPanel: React.FC = () => {
                 </div>
 
                 <div className="space-y-1">
-                  <label>Imagem Mock URL</label>
+                  <label>URL da Imagem</label>
                   <input
                     type="text"
                     required

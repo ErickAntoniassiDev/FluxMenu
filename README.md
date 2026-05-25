@@ -1,20 +1,33 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# FluxMenu
 
-# Run and deploy your AI Studio app
+Sistema de cardápio digital, autoatendimento, KDS, caixa e gestão administrativa para restaurantes.
 
-This contains everything you need to run your app locally.
+## Recursos
 
-View your app in AI Studio: https://ai.studio/apps/fafdeb04-8c3c-4d09-8974-463c9e4483ad
+- Cardápio digital com carrinho e envio de pedidos por mesa
+- Painel de cozinha com filas por status e prioridade
+- Caixa com fechamento de mesa e histórico de pagamentos
+- Administração de produtos, mesas e dados do estabelecimento
+- Controle de acesso por perfil operacional
 
-## Run Locally
+## Execução Local
 
-**Prerequisites:**  Node.js
+**Pré-requisito:** Node.js
 
+1. Instale as dependências:
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+   ```sh
+   npm install
+   ```
+
+2. Inicie o ambiente de desenvolvimento:
+
+   ```sh
+   npm run dev
+   ```
+
+3. Gere a build de produção:
+
+   ```sh
+   npm run build
+   ```

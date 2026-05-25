@@ -137,7 +137,7 @@ export const MENU_PRODUCTS: Product[] = [
   }
 ];
 
-export const MOCK_INITIAL_ORDERS = [
+export const INITIAL_ORDERS = [
   {
     id: "#1024",
     table: "Mesa 08",

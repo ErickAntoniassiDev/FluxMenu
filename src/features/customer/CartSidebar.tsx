@@ -24,7 +24,7 @@ export const CartSidebar: React.FC<CartSidebarProps> = ({ isOpen, onClose }) => 
     if (cart.length === 0) return;
     setIsSubmitting(true);
     
-    // Simulate real network request lag for premium SaaS feeling
+    // Brief processing delay for order confirmation feedback
     setTimeout(async () => {
       try {
         await confirmOrder();

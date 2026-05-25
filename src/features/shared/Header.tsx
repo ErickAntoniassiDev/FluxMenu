@@ -13,7 +13,7 @@ import {
   User, 
   UserCheck,
 } from 'lucide-react';
-import { MOCK_USERS } from '../../utils/rbac';
+import { STAFF_USERS } from '../../utils/rbac';
 
 const ROLE_LABEL_PT: Record<string, string> = {
   owner: 'Dono (Owner)',
@@ -40,7 +40,7 @@ export const Header: React.FC = () => {
     restaurantConfig,
     tableNumber,
     setTableNumber,
-    triggerSimulatedOrder,
+    createManualOrder,
     tables,
     currentUser,
     setCurrentUser,
@@ -179,19 +179,19 @@ export const Header: React.FC = () => {
 
         </div>
 
-        {/* Real-time simulations controls & Auth/Role Dropdown Switcher */}
+        {/* Operational controls and access profile selector */}
         <div className="flex items-center justify-between md:justify-end gap-3 w-full md:w-auto shrink-0 border-t border-slate-100/40 pt-2 md:pt-0 md:border-t-0">
           
-          {/* Simulation order dispatcher (Only visible if allowed) */}
-          {hasPermission('canSimulateOrders') && (
+          {/* Manual order entry dispatcher (only visible if allowed) */}
+          {hasPermission('canCreateManualOrders') && (
             <button
-              onClick={triggerSimulatedOrder}
+              onClick={createManualOrder}
               className="px-2 py-1.5 bg-red-600 text-white rounded-lg text-[10px] md:text-xs font-bold hover:bg-red-700 transition-all duration-200 active:scale-95 flex items-center gap-1 shrink-0 shadow-sm cursor-pointer"
-              title="Disparar novo pedido fictício aleatório nas mesas para testar o fluxo de KDS/Caixa"
-              id="simulate-order-btn"
+              title="Registrar uma nova entrada operacional para acompanhar o fluxo de KDS/Caixa"
+              id="manual-order-btn"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline leading-none">Simular Entrada</span>
+              <span className="hidden lg:inline leading-none">Nova Entrada</span>
             </button>
           )}
 
@@ -220,12 +220,12 @@ export const Header: React.FC = () => {
 
           <div className="h-6 w-px bg-slate-100 hidden sm:block"></div>
 
-          {/* Elegant Account Simulator Switcher (Auth Dropdown) */}
-          <div className="relative" ref={dropdownRef} id="auth-simulator-container">
+          {/* Access profile selector */}
+          <div className="relative" ref={dropdownRef} id="access-profile-container">
             <button
               onClick={() => setShowUserDropdown(!showUserDropdown)}
               className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl border border-slate-150 bg-slate-105 hover:bg-slate-100 transition-all duration-200 text-left cursor-pointer hover:border-slate-350 max-w-[120px] md:max-w-[200px]"
-              title="Simulador de Sessões e Permissões (RBAC)"
+              title="Alternar perfil de acesso"
               id="auth-profile-dropdown-btn"
             >
               {currentUser.avatar ? (
@@ -259,7 +259,7 @@ export const Header: React.FC = () => {
                   <div className="flex items-center gap-2.5">
                     <ShieldCheck className="w-4.5 h-4.5 text-slate-700" />
                     <div>
-                      <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-tight">Simulação de Segurança</h3>
+                      <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-tight">Perfis de Acesso</h3>
                       <p className="text-[10px] text-slate-400">Clique para alternar as permissões em tempo real</p>
                     </div>
                   </div>
@@ -267,7 +267,7 @@ export const Header: React.FC = () => {
 
                 {/* Dropdown Options List */}
                 <div className="max-h-72 overflow-y-auto divide-y divide-slate-50">
-                  {MOCK_USERS.map((user) => {
+                  {STAFF_USERS.map((user) => {
                     const isSelected = user.id === currentUser.id;
                     return (
                       <button

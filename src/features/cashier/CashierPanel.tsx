@@ -984,7 +984,7 @@ export const CashierPanel: React.FC = () => {
 
       </div>
 
-      {/* Extreme SaaS Wow Factor detail: Dynamic printer receipt simulation overlay modal */}
+      {/* Receipt preview overlay modal */}
       <AnimatePresence>
         {showReceiptModal && (
           <div className="fixed inset-0 bg-slate-900/60 z-55 flex items-center justify-center p-4 backdrop-blur-xs select-none">
@@ -998,7 +998,7 @@ export const CashierPanel: React.FC = () => {
               <div className="bg-slate-950 p-4 text-white flex justify-between items-center border-b">
                 <div className="flex items-center gap-2">
                   <Printer className="w-4 h-4 text-red-500" />
-                  <span className="text-xs font-black tracking-tight">CUPOM NÃO FISCAL - SIMULAÇÃO</span>
+                  <span className="text-xs font-black tracking-tight">CUPOM NÃO FISCAL - PRÉVIA</span>
                 </div>
                 <button
                   onClick={() => setShowReceiptModal(false)}
@@ -1008,10 +1008,10 @@ export const CashierPanel: React.FC = () => {
                 </button>
               </div>
 
-              {/* Scrollable Thermal Paper Mockup Container */}
+              {/* Scrollable receipt preview container */}
               <div className="p-8 max-h-[440px] overflow-y-auto bg-slate-100 flex items-center justify-center">
                 
-                {/* Simulated Thermal Tape roll */}
+                {/* Thermal tape preview */}
                 <div className="bg-white p-6 shadow-md border-x border-dashed border-slate-300 w-full font-mono text-[10px] text-slate-850 flex flex-col gap-4 leading-normal relative before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-slate-50">
                   
                   {/* Merchant information */}
@@ -1042,7 +1042,7 @@ export const CashierPanel: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Itemized list inside simulated tape */}
+                  {/* Itemized list inside receipt preview */}
                   <div className="flex flex-col gap-2.5 border-b border-dashed border-slate-250 pb-3">
                     <div className="flex justify-between font-bold text-slate-950 pb-1">
                       <span>ITEM DESCRIÇÃO (QTD x VR)</span>
@@ -1063,7 +1063,7 @@ export const CashierPanel: React.FC = () => {
                     ))}
                   </div>
 
-                  {/* Total ledger inside simulated tape - Vermelho no Rosa */}
+                  {/* Total ledger inside receipt preview */}
                   <div className="flex flex-col gap-1.5 border-b border-dashed border-slate-300 pb-3">
                     <div className="flex justify-between">
                       <span>Subtotal Consumo:</span>

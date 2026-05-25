@@ -132,7 +132,7 @@ const AppContent: React.FC = () => {
                 </div>
               );
             }
-            // Fallbacks: '/' or '/client' renders the gorgeous client-facing digital menu with zero background simulation noise
+            // Fallbacks: '/' or '/client' renders the client-facing digital menu
             return (
               <div className="flex-1 h-full overflow-hidden">
                 <ClientMenu />

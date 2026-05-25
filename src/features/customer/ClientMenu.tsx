@@ -69,7 +69,7 @@ export const ClientMenu: React.FC = () => {
           <a
             href="#/portal"
             className="px-3 py-2 rounded-xl text-[10px] uppercase font-black tracking-wider text-red-650 border border-red-100 bg-red-50/30 hover:bg-red-50 hover:text-red-750 transition flex items-center gap-1.5 cursor-pointer select-none"
-            title="Clique para acessar o Portal Administrativo com simulação de papéis (RBAC), KDS de Cozinha e Caixa"
+            title="Clique para acessar o Portal Administrativo com perfis operacionais, KDS de Cozinha e Caixa"
           >
             <span>🔐 Portal</span>
           </a>

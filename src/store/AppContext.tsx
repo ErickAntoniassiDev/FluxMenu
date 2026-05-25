@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { Product, CartItem, Order, OrderStatus, Toast, OrderItem, RestaurantConfig, PaymentLog, UserRole, UserSession, RolePermissionConfig } from '../types';
-import { MENU_PRODUCTS, MOCK_INITIAL_ORDERS, RESTAURANT_PROFILE } from '../data';
-import { MOCK_USERS, ROLE_PERMISSIONS } from '../utils/rbac';
+import { MENU_PRODUCTS, INITIAL_ORDERS, RESTAURANT_PROFILE } from '../data';
+import { STAFF_USERS, ROLE_PERMISSIONS } from '../utils/rbac';
 
 interface AppContextType {
   products: Product[];
@@ -33,8 +33,8 @@ interface AppContextType {
   updateOrderStatus: (orderId: string, nextStatus: OrderStatus) => void;
   archiveOrder: (orderId: string) => void;
   clearAllOrders: () => void;
-  resetMockOrders: () => void;
-  triggerSimulatedOrder: () => void;
+  resetInitialOrders: () => void;
+  createManualOrder: () => void;
   
   // Cashier Actions
   paymentLogs: PaymentLog[];
@@ -55,13 +55,13 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Simulated User Session State
+  // User session state
   const [currentUser, setCurrentUserInternal] = useState<UserSession>(() => {
     const saved = localStorage.getItem('flux_current_user');
     if (saved) {
       try { return JSON.parse(saved); } catch (e) { console.error(e); }
     }
-    return MOCK_USERS[0]; // Carlos Santos (Owner)
+    return STAFF_USERS[0];
   });
 
   useEffect(() => {
@@ -118,7 +118,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setActiveModeState(target);
       localStorage.setItem('flux_active_mode', target);
     }
-    addToast(`Sessão simulada: ${user.name} (${user.role.toUpperCase()})`, 'success');
+    addToast(`Perfil ativo: ${user.name} (${user.role.toUpperCase()})`, 'success');
   };
 
   const hasPermission = (action: keyof Omit<RolePermissionConfig, 'allowedModes'>) => {
@@ -188,7 +188,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (saved) {
       try { return JSON.parse(saved); } catch (e) { console.error(e); }
     }
-    return MOCK_INITIAL_ORDERS;
+    return INITIAL_ORDERS;
   });
 
   useEffect(() => {
@@ -249,12 +249,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
   };
 
-  // Confirm and submit order to kitchen with simulated steps
+  // Confirm and submit order to kitchen
   const confirmOrder = async (onSuccess?: () => void) => {
     if (cart.length === 0) return;
 
-    // We will do a small timeout simulation inside the calling component (represented by states).
-    // This action creates the order and puts it in production.
     const orderItems: OrderItem[] = cart.map(item => ({
       productId: item.product.id,
       name: item.product.name,
@@ -342,19 +340,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast('Todos os pedidos foram limpos de forma permanente', 'warning');
   };
 
-  const resetMockOrders = () => {
+  const resetInitialOrders = () => {
     if (!ROLE_PERMISSIONS[currentUser.role].canUpdateKDS) {
       addToast("Operação não autorizada para seu nível de acesso!", "warning");
       return;
     }
-    setOrders(MOCK_INITIAL_ORDERS);
+    setOrders(INITIAL_ORDERS);
     addToast('Pedidos redefinidos para os originais de fábrica', 'success');
   };
 
-  // Simulate incoming business orders
-  const triggerSimulatedOrder = () => {
-    if (!ROLE_PERMISSIONS[currentUser.role].canSimulateOrders) {
-      addToast("Apenas administradores e gerentes podem acionar novas simulações de vendas!", "warning");
+  // Create a manual incoming order
+  const createManualOrder = () => {
+    if (!ROLE_PERMISSIONS[currentUser.role].canCreateManualOrders) {
+      addToast("Apenas administradores e gerentes podem registrar novas entradas manuais!", "warning");
       return;
     }
     const randomTable = tables[Math.floor(Math.random() * tables.length)];
@@ -540,8 +538,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateOrderStatus,
       archiveOrder,
       clearAllOrders,
-      resetMockOrders,
-      triggerSimulatedOrder,
+      resetInitialOrders,
+      createManualOrder,
       paymentLogs,
       checkoutTable,
       clearPaymentHistory,
