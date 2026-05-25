@@ -103,6 +103,7 @@ export interface PaymentLog {
   timestamp: string;
   itemsCount: number;
   orders: string[]; // itemized order IDs
+  operatorId?: string;
 }
 
 export interface Toast {

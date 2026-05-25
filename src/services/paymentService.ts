@@ -1,9 +1,53 @@
+import { logDataSource, logSupabaseFallback } from '../lib/supabase/client';
+import * as PaymentSupabaseRepository from '../repositories/supabase/paymentSupabaseRepository';
 import { Order, PaymentLog, RestaurantId } from '../types';
 
 export type PaymentMethod = 'pix' | 'credito' | 'debito' | 'dinheiro';
+export type DataSource = 'supabase' | 'fallback';
+
+export interface PaymentLogsLoadResult {
+  paymentLogs: PaymentLog[];
+  source: DataSource;
+}
+
+export interface CloseTablePaymentInput {
+  restaurantId: RestaurantId;
+  table: string;
+  paymentMethod: PaymentMethod;
+  serviceTax: number;
+  discount: number;
+}
 
 export function getPaymentLogsForRestaurant(paymentLogs: PaymentLog[], restaurantId: RestaurantId): PaymentLog[] {
   return paymentLogs.filter(log => log.restaurantId === restaurantId);
+}
+
+export async function loadPaymentLogsWithFallback(restaurantId: RestaurantId, fallbackLogs: PaymentLog[] = []): Promise<PaymentLogsLoadResult> {
+  try {
+    const paymentLogs = await PaymentSupabaseRepository.findPaymentLogsForRestaurant(restaurantId);
+    logDataSource('payment_logs', 'supabase', { restaurantId, paymentLogs: paymentLogs.length });
+    return { paymentLogs, source: 'supabase' };
+  } catch (error) {
+    logSupabaseFallback('payment_logs', error);
+  }
+
+  const paymentLogs = getPaymentLogsForRestaurant(fallbackLogs, restaurantId);
+  logDataSource('payment_logs', 'fallback', { restaurantId, paymentLogs: paymentLogs.length });
+  return { paymentLogs, source: 'fallback' };
+}
+
+export async function closeTablePaymentInSupabase(input: CloseTablePaymentInput): Promise<PaymentLog> {
+  if (!input.table.trim()) throw new Error('Mesa obrigatória.');
+  if (!['pix', 'credito', 'debito', 'dinheiro'].includes(input.paymentMethod)) throw new Error('Forma de pagamento inválida.');
+  if (input.serviceTax < 0 || input.discount < 0) throw new Error('Ajustes financeiros inválidos.');
+
+  const log = await PaymentSupabaseRepository.closeTablePayment(input);
+  logDataSource('table checkout', 'supabase', { restaurantId: input.restaurantId, table: input.table, paymentId: log.id });
+  return log;
+}
+
+export function subscribeToRestaurantPayments(restaurantId: RestaurantId, onChange: () => void): () => void {
+  return PaymentSupabaseRepository.subscribeToRestaurantPayments(restaurantId, onChange);
 }
 
 export function getUnpaidOrdersByTable(orders: Order[], table: string, restaurantId: RestaurantId): Order[] {

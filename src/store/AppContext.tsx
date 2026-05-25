@@ -52,7 +52,7 @@ interface AppContextType {
   archiveOrder: (orderId: string) => void;
   clearAllOrders: () => void;
   paymentLogs: PaymentLog[];
-  checkoutTable: (table: string, paymentMethod: 'pix' | 'credito' | 'debito' | 'dinheiro') => void;
+  checkoutTable: (table: string, paymentMethod: 'pix' | 'credito' | 'debito' | 'dinheiro', serviceTax?: number, discount?: number) => Promise<void>;
   clearPaymentHistory: () => void;
   updateProduct: (updated: Product) => Promise<void>;
   addProduct: (newProd: Omit<Product, 'id' | 'restaurantId'>) => Promise<void>;
@@ -304,10 +304,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCart(prev => prev.filter(item => item.product.restaurantId === nextRestaurantId));
 
         if (authSession && restaurantIds.includes(nextRestaurantId)) {
-          const orderLoad = await OrderService.loadOrdersWithFallback(nextRestaurantId);
+          const [orderLoad, paymentLogLoad] = await Promise.all([
+            OrderService.loadOrdersWithFallback(nextRestaurantId),
+            PaymentService.loadPaymentLogsWithFallback(nextRestaurantId)
+          ]);
           setAllOrders(prev => [
             ...prev.filter(order => order.restaurantId !== nextRestaurantId),
             ...orderLoad.orders
+          ]);
+          setAllPaymentLogs(prev => [
+            ...prev.filter(log => log.restaurantId !== nextRestaurantId),
+            ...paymentLogLoad.paymentLogs
           ]);
         }
 
@@ -384,25 +391,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!supabaseConfigured || !authSession || !activeRestaurantId) return;
     let cancelled = false;
 
-    const reloadOrders = () => {
-      OrderService.loadOrdersWithFallback(activeRestaurantId)
-        .then(result => {
+    const reloadOrdersAndPayments = () => {
+      Promise.all([
+        OrderService.loadOrdersWithFallback(activeRestaurantId),
+        PaymentService.loadPaymentLogsWithFallback(activeRestaurantId)
+      ])
+        .then(([orderResult, paymentResult]) => {
           if (cancelled) return;
           setAllOrders(prev => [
             ...prev.filter(order => order.restaurantId !== activeRestaurantId),
-            ...result.orders
+            ...orderResult.orders
+          ]);
+          setAllPaymentLogs(prev => [
+            ...prev.filter(log => log.restaurantId !== activeRestaurantId),
+            ...paymentResult.paymentLogs
           ]);
         })
         .catch(error => {
-          if (import.meta.env.DEV) console.warn('[FluxMenu data] Orders realtime reload failed.', error);
+          if (import.meta.env.DEV) console.warn('[FluxMenu data] Cashier realtime reload failed.', error);
         });
     };
 
-    reloadOrders();
-    const unsubscribe = OrderService.subscribeToRestaurantOrders(activeRestaurantId, reloadOrders);
+    reloadOrdersAndPayments();
+    const unsubscribeOrders = OrderService.subscribeToRestaurantOrders(activeRestaurantId, reloadOrdersAndPayments);
+    const unsubscribePayments = PaymentService.subscribeToRestaurantPayments(activeRestaurantId, reloadOrdersAndPayments);
     return () => {
       cancelled = true;
-      unsubscribe();
+      unsubscribeOrders();
+      unsubscribePayments();
     };
   }, [activeRestaurantId, authSession, supabaseConfigured]);
 
@@ -683,7 +699,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast(num + ' removida do sistema', 'warning');
   };
 
-  const checkoutTable = (table: string, paymentMethod: 'pix' | 'credito' | 'debito' | 'dinheiro') => {
+  const checkoutTable = async (table: string, paymentMethod: 'pix' | 'credito' | 'debito' | 'dinheiro', serviceTax = 0, discount = 0) => {
     if (!ROLE_PERMISSIONS[currentUser.role].canProcessCheckout) {
       addToast('Seu perfil não possui autorização para receber pagamentos e faturar mesas!', 'warning');
       return;
@@ -693,11 +709,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast('A ' + table + ' não possui faturas pendentes de pagamento!', 'warning');
       return;
     }
-    const newLog = PaymentService.createPaymentLog(activeRestaurantId, table, unpaidOrders, paymentMethod);
-    setAllOrders(prev => PaymentService.checkoutOrders(prev, table, activeRestaurantId, paymentMethod));
-    setAllPaymentLogs(prev => [newLog, ...prev]);
-    const methodNames = { pix: 'PIX', credito: 'Cartão de Crédito', debito: 'Cartão de Débito', dinheiro: 'Dinheiro' };
-    addToast('Mesa ' + table + ' finalizada via ' + methodNames[paymentMethod] + '! Total: R$ ' + newLog.amount.toFixed(2), 'success');
+
+    try {
+      const newLog = supabaseConfigured
+        ? await PaymentService.closeTablePaymentInSupabase({ restaurantId: activeRestaurantId, table, paymentMethod, serviceTax, discount })
+        : PaymentService.createPaymentLog(activeRestaurantId, table, unpaidOrders, paymentMethod);
+      setAllOrders(prev => PaymentService.checkoutOrders(prev, table, activeRestaurantId, paymentMethod));
+      setAllPaymentLogs(prev => [newLog, ...prev.filter(log => log.id !== newLog.id)]);
+      const methodNames = { pix: 'PIX', credito: 'Cartão de Crédito', debito: 'Cartão de Débito', dinheiro: 'Dinheiro' };
+      addToast('Mesa ' + table + ' finalizada via ' + methodNames[paymentMethod] + '! Total: R$ ' + newLog.amount.toFixed(2), 'success');
+    } catch (error) {
+      console.error(error);
+      addToast(error instanceof Error ? error.message : 'Não foi possível fechar a mesa.', 'warning');
+      throw error;
+    }
   };
 
   const clearPaymentHistory = () => {

@@ -51,14 +51,10 @@ export const CashierPanel: React.FC = () => {
   const [checkoutStep, setCheckoutStep] = useState<'bill' | 'payment' | 'completed'>('bill');
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credito' | 'debito' | 'dinheiro'>('pix');
   const [cashAmountPaid, setCashAmountPaid] = useState<string>('');
+  const [isClosingTable, setIsClosingTable] = useState<boolean>(false);
   
   // Thermal receipt modal state
   const [showReceiptModal, setShowReceiptModal] = useState<boolean>(false);
-
-  // Filter tables
-  const filteredTables = useMemo(() => {
-    return tables.filter(t => t.toLowerCase().includes(tableSearch.toLowerCase()));
-  }, [tables, tableSearch]);
 
   // Aggregate unpaid orders grouped by table
   const tableBillingData = useMemo(() => {
@@ -143,6 +139,11 @@ export const CashierPanel: React.FC = () => {
     return result;
   }, [orders]);
 
+  // Filter tables with open bills only.
+  const filteredTables = useMemo(() => {
+    return tables.filter(t => tableBillingData[t] && t.toLowerCase().includes(tableSearch.toLowerCase()));
+  }, [tables, tableSearch, tableBillingData]);
+
   // Statistics summaries
   const stats = useMemo(() => {
     const faturamento = paymentLogs.reduce((acc, log) => acc + log.amount, 0);
@@ -191,15 +192,16 @@ export const CashierPanel: React.FC = () => {
   }, [paymentMethod, cashAmountPaid, billingSummary]);
 
   // Trigger Checkout Execution
-  const handleConfirmCheckout = () => {
-    if (!selectedTable) return;
-    
-    // Run the actual state store update
-    checkoutTable(selectedTable, paymentMethod);
-    
-    // Transition UI
-    setCheckoutStep('completed');
-    addToast(`Pagamento da ${selectedTable} processado com sucesso!`, 'success');
+  const handleConfirmCheckout = async () => {
+    if (!selectedTable || isClosingTable) return;
+    setIsClosingTable(true);
+    try {
+      await checkoutTable(selectedTable, paymentMethod, billingSummary.taxaServico, billingSummary.desconto);
+      setCheckoutStep('completed');
+      addToast(`Pagamento da ${selectedTable} processado com sucesso!`, 'success');
+    } finally {
+      setIsClosingTable(false);
+    }
   };
 
   // Close Register Table Action
@@ -848,11 +850,12 @@ export const CashierPanel: React.FC = () => {
                             </button>
                             <button
                               onClick={handleConfirmCheckout}
-                              className="grow py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl leading-none text-xs font-black tracking-wide transition active:scale-[0.98] flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/15 cursor-pointer"
+                              disabled={isClosingTable}
+                              className="grow py-3 bg-emerald-600 disabled:opacity-60 disabled:pointer-events-none hover:bg-emerald-700 text-white rounded-xl leading-none text-xs font-black tracking-wide transition active:scale-[0.98] flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/15 cursor-pointer"
                               id="btn-confirm-payment"
                             >
                               <Check className="w-4 h-4" />
-                              <span>Registrar Pagamento {formatCurrency(billingSummary.total)}</span>
+                              <span>{isClosingTable ? 'Registrando...' : `Registrar Pagamento ${formatCurrency(billingSummary.total)}`}</span>
                             </button>
                           </div>
                         )}
