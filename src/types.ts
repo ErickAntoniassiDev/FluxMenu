@@ -3,6 +3,39 @@ export type MenuCategoryFilter = ProductCategory | 'todos';
 
 export type RestaurantId = string;
 
+export type SaaSPlanId = 'starter' | 'pro' | 'premium';
+
+export type SaaSFeature =
+  | 'digital_menu'
+  | 'kds'
+  | 'cashier'
+  | 'admin_catalog'
+  | 'qr_tables'
+  | 'payment_history'
+  | 'manual_orders'
+  | 'advanced_reports'
+  | 'multi_user_rbac'
+  | 'priority_support';
+
+export type SaaSLimit =
+  | 'maxProducts'
+  | 'maxTables'
+  | 'maxStaffUsers'
+  | 'maxOrdersPerMonth'
+  | 'paymentHistoryDays'
+  | 'maxRestaurants';
+
+export interface SaaSPlan {
+  id: SaaSPlanId;
+  name: string;
+  price: number;
+  currency: 'BRL';
+  billingPeriod: 'monthly';
+  features: Record<SaaSFeature, boolean>;
+  limits: Record<SaaSLimit, number>;
+}
+
+
 export interface CategoryOption {
   id: MenuCategoryFilter;
   label: string;
