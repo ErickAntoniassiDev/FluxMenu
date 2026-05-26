@@ -6,6 +6,7 @@ import * as AnalyticsService from '../../services/analyticsService';
 import * as TableService from '../../services/tableService';
 import * as StaffService from '../../services/staffService';
 import * as AssetService from '../../services/assetService';
+import * as ProductImageService from '../../services/productImageService';
 import * as BillingService from '../../services/billingService';
 import { AnalyticsPeriod, DashboardMetrics } from '../../services/analyticsService';
 import { UpgradeNotice } from '../shared/UpgradeNotice';
@@ -101,7 +102,9 @@ export const AdminPanel: React.FC = () => {
   const [newDesc, setNewDesc] = useState('');
   const [newCategory, setNewCategory] = useState<string>('entradas');
   const [newPrep, setNewPrep] = useState(15);
-  const [newImage, setNewImage] = useState('https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=cover&q=80');
+  const [newImageFile, setNewImageFile] = useState<File | null>(null);
+  const [newImagePreview, setNewImagePreview] = useState('');
+  const [editingProductOriginalImage, setEditingProductOriginalImage] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');
   const [editingCategory, setEditingCategory] = useState<CategoryOption | null>(null);
   const [adminLoading, setAdminLoading] = useState<string | null>(null);
@@ -275,6 +278,56 @@ export const AdminPanel: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    return () => {
+      if (newImagePreview.startsWith('blob:')) URL.revokeObjectURL(newImagePreview);
+    };
+  }, [newImagePreview]);
+
+  const resetNewProductForm = () => {
+    setNewName('');
+    setNewPrice(0);
+    setNewDesc('');
+    setNewPrep(15);
+    setNewImageFile(null);
+    setNewImagePreview('');
+  };
+
+  const closeAddProductForm = () => {
+    resetNewProductForm();
+    setIsAddFormOpen(false);
+  };
+
+  const handleNewProductImageSelect = (file?: File | null) => {
+    if (!file) return;
+    setAdminError(null);
+    setNewImageFile(file);
+    setNewImagePreview(URL.createObjectURL(file));
+  };
+
+  const openEditProduct = (product: Product) => {
+    setEditingProduct(product);
+    setEditingProductOriginalImage(product.image || '');
+  };
+
+  const closeEditProduct = () => {
+    setEditingProduct(null);
+    setEditingProductOriginalImage('');
+  };
+
+  const handleEditProductImageUpload = async (file?: File | null) => {
+    if (!file || !editingProduct) return;
+    await runAdminAction('edit-product-image', async () => {
+      const imageUrl = await ProductImageService.uploadProductImage(activeRestaurantId, editingProduct.id, file);
+      setEditingProduct(prev => prev ? { ...prev, image: imageUrl } : prev);
+    });
+  };
+
+  const handleRemoveEditingProductImage = () => {
+    if (!editingProduct) return;
+    setEditingProduct({ ...editingProduct, image: '' });
+  };
+
   const handleToggleAvailability = (prod: Product) => {
     void runAdminAction('product-' + prod.id, () => updateProduct({
       ...prod,
@@ -286,8 +339,13 @@ export const AdminPanel: React.FC = () => {
     e.preventDefault();
     if (!editingProduct) return;
     await runAdminAction('edit-product', async () => {
-      await updateProduct(editingProduct);
-      setEditingProduct(null);
+      const previousImage = editingProductOriginalImage;
+      const savedProduct = await updateProduct(editingProduct);
+      if (!savedProduct) throw new Error('Produto não foi salvo.');
+      if (previousImage && previousImage !== savedProduct.image) {
+        await ProductImageService.deleteProductImageUrl(activeRestaurantId, savedProduct.id, previousImage).catch(() => undefined);
+      }
+      closeEditProduct();
     });
   };
 
@@ -298,19 +356,24 @@ export const AdminPanel: React.FC = () => {
     if (!newCategory) return setAdminError('Categoria é obrigatória.');
     if (newPrice <= 0) return setAdminError('Preço precisa ser maior que zero.');
     await runAdminAction('add-product', async () => {
-      await addProduct({
+      const createdProduct = await addProduct({
         name: newName,
         price: Number(newPrice),
         description: newDesc,
         category: newCategory as any,
         prepTimeMinutes: Number(newPrep),
-        image: newImage || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=cover&q=80',
+        image: '',
         available: true
       });
-      setNewName('');
-      setNewPrice(0);
-      setNewDesc('');
-      setNewPrep(15);
+      if (!createdProduct) throw new Error('Produto não foi criado.');
+
+      if (newImageFile) {
+        const imageUrl = await ProductImageService.uploadProductImage(activeRestaurantId, createdProduct.id, newImageFile);
+        const savedProduct = await updateProduct({ ...createdProduct, image: imageUrl });
+        if (!savedProduct) throw new Error('Imagem enviada, mas não foi possível salvar o produto.');
+      }
+
+      resetNewProductForm();
       setIsAddFormOpen(false);
     });
   };
@@ -757,7 +820,7 @@ export const AdminPanel: React.FC = () => {
 
               {/* Vermelho no Rosa e Forte */}
               <button
-                onClick={() => setIsAddFormOpen(true)}
+                onClick={() => { resetNewProductForm(); setIsAddFormOpen(true); }}
                 className="px-3.5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-black flex items-center gap-1 cursor-pointer transition select-none tracking-wide"
                 id="admin-btn-add-product"
               >
@@ -849,12 +912,20 @@ export const AdminPanel: React.FC = () => {
                     {products.map(prod => (
                       <tr key={prod.id} className="hover:bg-slate-50/50 transition duration-150">
                         <td className="p-4 flex items-center gap-3">
-                          <img
-                            src={prod.image}
-                            alt={prod.name}
-                            referrerPolicy="no-referrer"
-                            className="w-10 h-10 rounded-lg object-cover bg-slate-105 border border-slate-200 shadow-xs shrink-0"
-                          />
+                          {prod.image ? (
+                            <img
+                              src={prod.image}
+                              alt={prod.name}
+                              referrerPolicy="no-referrer"
+                              loading="lazy"
+                              decoding="async"
+                              className="w-10 h-10 rounded-lg object-cover bg-slate-105 border border-slate-200 shadow-xs shrink-0"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 shadow-xs shrink-0 flex items-center justify-center text-slate-350">
+                              <ImageIcon className="w-4 h-4" />
+                            </div>
+                          )}
                           <div>
                             <span className="font-extrabold text-slate-900 block">{prod.name}</span>
                             <span className="text-[10px] text-slate-450 leading-none truncate max-w-[200px] block mt-1 font-semibold">
@@ -905,7 +976,7 @@ export const AdminPanel: React.FC = () => {
 
                         <td className="p-4 text-right space-x-2">
                           <button
-                            onClick={() => setEditingProduct(prod)}
+                            onClick={() => openEditProduct(prod)}
                             className="px-2.5 py-1 border border-slate-250 hover:border-slate-300 rounded text-[10px] font-bold text-slate-600 hover:text-slate-800 bg-white cursor-pointer transition select-none active:scale-95"
                             id={`edit-prod-btn-${prod.id}`}
                           >
@@ -1246,11 +1317,11 @@ export const AdminPanel: React.FC = () => {
       {/* MODAL EDIT ELEMENT FOR PRODUCTS CATALOG */}
       {editingProduct && (
         <div className="fixed inset-0 z-50 overflow-y-auto" id="edit-prod-wrapper">
-          <div className="fixed inset-0 bg-black/45 backdrop-blur-xs" onClick={() => setEditingProduct(null)} />
+          <div className="fixed inset-0 bg-black/45 backdrop-blur-xs" onClick={closeEditProduct} />
           <div className="flex min-h-full items-center justify-center p-4 animate-fade-in">
             <div className="relative bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
               <button
-                onClick={() => setEditingProduct(null)}
+                onClick={closeEditProduct}
                 className="absolute right-4 top-4 hover:bg-slate-100 text-slate-400 p-1.5 rounded-lg shrink-0 cursor-pointer"
               >
                 <X className="w-4 h-4" />
@@ -1311,14 +1382,47 @@ export const AdminPanel: React.FC = () => {
                 </div>
 
                 <div className="space-y-1">
-                  <label>URL da Imagem</label>
-                  <input
-                    type="text"
-                    required
-                    value={editingProduct.image}
-                    onChange={(e) => setEditingProduct({ ...editingProduct, image: e.target.value })}
-                    className="w-full p-2.5 border border-slate-205 bg-slate-50 rounded-lg text-xs outline-hidden focus:border-red-650 font-normal text-slate-700"
-                  />
+                  <label>Imagem do produto</label>
+                  <div
+                    className="flex items-center gap-3 rounded-xl border border-dashed border-slate-250 bg-slate-50 p-3"
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      void handleEditProductImageUpload(e.dataTransfer.files?.[0]);
+                    }}
+                  >
+                    {editingProduct.image ? (
+                      <img src={editingProduct.image} alt={editingProduct.name} className="h-16 w-16 rounded-lg object-cover border border-slate-200 bg-white" />
+                    ) : (
+                      <div className="h-16 w-16 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-350">
+                        <ImageIcon className="h-5 w-5" />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className="flex flex-wrap gap-2">
+                        <label className="inline-flex h-8 items-center rounded-lg bg-slate-950 px-3 text-[10px] font-black uppercase text-white cursor-pointer">
+                          {adminLoading === 'edit-product-image' ? 'Enviando...' : 'Enviar imagem'}
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            disabled={adminLoading === 'edit-product-image'}
+                            className="hidden"
+                            onChange={(e) => void handleEditProductImageUpload(e.target.files?.[0])}
+                          />
+                        </label>
+                        {editingProduct.image && (
+                          <button
+                            type="button"
+                            onClick={handleRemoveEditingProductImage}
+                            className="h-8 rounded-lg border border-slate-250 px-3 text-[10px] font-black uppercase text-slate-600 hover:bg-white cursor-pointer"
+                          >
+                            Remover
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-[10px] leading-tight text-slate-450 font-semibold">JPG, PNG ou WEBP. A imagem será comprimida para WEBP antes do upload.</p>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-1">
@@ -1349,11 +1453,11 @@ export const AdminPanel: React.FC = () => {
       {/* MODAL ADD ELEMENT FOR NEW CATALOG CARD */}
       {isAddFormOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto" id="add-prod-wrapper-container">
-          <div className="fixed inset-0 bg-black/45 backdrop-blur-xs animate-fade-in" onClick={() => setIsAddFormOpen(false)} />
+          <div className="fixed inset-0 bg-black/45 backdrop-blur-xs animate-fade-in" onClick={closeAddProductForm} />
           <div className="flex min-h-full items-center justify-center p-4">
             <div className="relative bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
               <button
-                onClick={() => setIsAddFormOpen(false)}
+                onClick={closeAddProductForm}
                 className="absolute right-4 top-4 hover:bg-slate-100 text-slate-400 p-1.5 rounded-lg shrink-0 cursor-pointer"
               >
                 <X className="w-4 h-4" />
@@ -1421,15 +1525,49 @@ export const AdminPanel: React.FC = () => {
                 </div>
 
                 <div className="space-y-1">
-                  <label>Imagem URL</label>
-                  <input
-                    type="text"
-                    value={newImage}
-                    onChange={(e) => setNewImage(e.target.value)}
-                    placeholder="URL de imagem opcional Unsplash"
-                    className="w-full p-2.5 border border-slate-205 bg-slate-50 rounded-lg text-xs outline-hidden focus:border-red-650 font-normal text-slate-700"
-                    id="add-prod-input-image"
-                  />
+                  <label>Imagem do produto</label>
+                  <div
+                    className="rounded-xl border border-dashed border-slate-250 bg-slate-50 p-3"
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      handleNewProductImageSelect(e.dataTransfer.files?.[0]);
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      {newImagePreview ? (
+                        <img src={newImagePreview} alt="Prévia do produto" className="h-16 w-16 rounded-lg object-cover border border-slate-200 bg-white" />
+                      ) : (
+                        <div className="h-16 w-16 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-350">
+                          <ImageIcon className="h-5 w-5" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <div className="flex flex-wrap gap-2">
+                          <label className="inline-flex h-8 items-center rounded-lg bg-slate-950 px-3 text-[10px] font-black uppercase text-white cursor-pointer">
+                            Selecionar imagem
+                            <input
+                              id="add-prod-input-image"
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp"
+                              className="hidden"
+                              onChange={(e) => handleNewProductImageSelect(e.target.files?.[0])}
+                            />
+                          </label>
+                          {newImagePreview && (
+                            <button
+                              type="button"
+                              onClick={() => { setNewImageFile(null); setNewImagePreview(''); }}
+                              className="h-8 rounded-lg border border-slate-250 px-3 text-[10px] font-black uppercase text-slate-600 hover:bg-white cursor-pointer"
+                            >
+                              Remover
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-[10px] leading-tight text-slate-450 font-semibold">JPG, PNG ou WEBP. Upload real no Supabase Storage após salvar o produto.</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-1">

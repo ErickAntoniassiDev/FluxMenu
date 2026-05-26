@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../store/AppContext';
-import { X, Trash2, ArrowRight, Table, AlertCircle, Sparkles } from 'lucide-react';
+import { Image as ImageIcon, X, Trash2, ArrowRight, Table, AlertCircle, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface CartSidebarProps {
@@ -100,12 +100,20 @@ export const CartSidebar: React.FC<CartSidebarProps> = ({ isOpen, onClose }) => 
                     <div className="divide-y divide-slate-100">
                       {cart.map((item, index) => (
                         <div key={`${item.product.id}-${index}`} className="py-4 flex gap-3 first:pt-0 last:pb-0" id={`cart-item-${item.product.id}`}>
-                          <img
-                            src={item.product.image}
-                            alt={item.product.name}
-                            referrerPolicy="no-referrer"
-                            className="w-12 h-12 rounded-lg object-cover bg-slate-100 border border-slate-150 shrink-0"
-                          />
+                          {item.product.image ? (
+                            <img
+                              src={item.product.image}
+                              alt={item.product.name}
+                              referrerPolicy="no-referrer"
+                              loading="lazy"
+                              decoding="async"
+                              className="w-12 h-12 rounded-lg object-cover bg-slate-100 border border-slate-150 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded-lg bg-slate-100 border border-slate-150 shrink-0 flex items-center justify-center text-slate-350">
+                              <ImageIcon className="w-4 h-4" />
+                            </div>
+                          )}
                           <div className="flex-1 min-w-0">
                             <span className="text-xs font-bold text-slate-900 block truncate">{item.product.name}</span>
                             <span className="text-xs font-black text-red-600 font-mono block mt-0.5">

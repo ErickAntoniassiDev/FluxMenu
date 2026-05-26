@@ -66,8 +66,8 @@ interface AppContextType {
   paymentLogs: PaymentLog[];
   checkoutTable: (table: string, paymentMethod: 'pix' | 'credito' | 'debito' | 'dinheiro', serviceTax?: number, discount?: number) => Promise<void>;
   clearPaymentHistory: () => void;
-  updateProduct: (updated: Product) => Promise<void>;
-  addProduct: (newProd: Omit<Product, 'id' | 'restaurantId'>) => Promise<void>;
+  updateProduct: (updated: Product) => Promise<Product | null>;
+  addProduct: (newProd: Omit<Product, 'id' | 'restaurantId'>) => Promise<Product | null>;
   deleteProduct: (id: string) => Promise<void>;
   addCategory: (name: string) => Promise<void>;
   updateCategory: (category: CategoryOption) => Promise<void>;
@@ -847,37 +847,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
 
-  const updateProduct = async (updated: Product) => {
+  const updateProduct = async (updated: Product): Promise<Product | null> => {
     if (!ROLE_PERMISSIONS[currentUser.role].canEditProducts) {
       addToast('Apenas gestores com permissão de edição de catálogo podem alterar produtos!', 'warning');
-      return;
+      return null;
     }
 
     try {
       const savedProduct = await CatalogService.saveProduct({ ...updated, restaurantId: activeRestaurantId });
       setAllProducts(prev => CatalogService.updateProduct(prev, savedProduct));
       addToast('Produto "' + savedProduct.name + '" salvo no Supabase.', 'success');
+      return savedProduct;
     } catch (error) {
       console.error(error);
       addToast('Não foi possível salvar no Supabase. Verifique conexão e permissões.', 'warning');
+      return null;
     }
   };
 
-  const addProduct = async (newProd: Omit<Product, 'id' | 'restaurantId'>) => {
+  const addProduct = async (newProd: Omit<Product, 'id' | 'restaurantId'>): Promise<Product | null> => {
     if (!ROLE_PERMISSIONS[currentUser.role].canEditProducts) {
       addToast('Apenas gestores com permissão de edição de catálogo podem adicionar produtos!', 'warning');
-      return;
+      return null;
     }
 
-    if (!requireLimit('maxProducts', products.length, 1)) return;
+    if (!requireLimit('maxProducts', products.length, 1)) return null;
 
     try {
       const createdProduct = await CatalogService.createProductInSupabase({ ...newProd, restaurantId: activeRestaurantId });
       setAllProducts(prev => [...prev, createdProduct]);
       addToast('Produto "' + createdProduct.name + '" criado no Supabase.', 'success');
+      return createdProduct;
     } catch (error) {
       console.error(error);
       addToast(error instanceof Error ? error.message : 'Não foi possível criar o produto.', 'warning');
+      return null;
     }
   };
 

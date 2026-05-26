@@ -322,6 +322,55 @@ export async function updateSupabaseRows<T>(tableName: string, query: string, pa
   return response.json() as Promise<T[]>;
 }
 
+
+function getAuthenticatedStorageClient(accessToken: string): SupabaseClient {
+  return createClient(getSupabaseBaseUrl(), supabaseAnonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: 'Bearer ' + accessToken } }
+  });
+}
+
+export async function uploadSupabaseStorageObject(bucketName: string, path: string, file: Blob, contentType: string): Promise<string> {
+  const token = await getAuthorizationToken();
+  const client = getAuthenticatedStorageClient(token);
+  const { error } = await client.storage.from(bucketName).upload(path, file, {
+    cacheControl: '31536000',
+    contentType,
+    upsert: true
+  });
+
+  if (error) {
+    throw new Error('Supabase storage upload failed for ' + path + ': ' + error.message);
+  }
+
+  const { data } = client.storage.from(bucketName).getPublicUrl(path);
+  return data.publicUrl;
+}
+
+export async function deleteSupabaseStorageObjects(bucketName: string, paths: string[]): Promise<void> {
+  const validPaths = paths.filter(Boolean);
+  if (validPaths.length === 0) return;
+
+  const token = await getAuthorizationToken();
+  const client = getAuthenticatedStorageClient(token);
+  const { error } = await client.storage.from(bucketName).remove(validPaths);
+  if (error) {
+    throw new Error('Supabase storage delete failed for ' + bucketName + ': ' + error.message);
+  }
+}
+
+export function getSupabasePublicStoragePath(bucketName: string, publicUrl: string): string | null {
+  const marker = '/storage/v1/object/public/' + bucketName + '/';
+  const markerIndex = publicUrl.indexOf(marker);
+  if (markerIndex < 0) return null;
+  const rawPath = publicUrl.slice(markerIndex + marker.length).split('?')[0];
+  try {
+    return decodeURIComponent(rawPath);
+  } catch {
+    return rawPath;
+  }
+}
+
 export async function uploadSupabaseAsset(bucketName: string, path: string, file: File): Promise<string> {
   const baseUrl = getSupabaseBaseUrl();
   const token = await getAuthorizationToken();

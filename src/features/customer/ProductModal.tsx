@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Product } from '../../types';
 import { useApp } from '../../store/AppContext';
-import { X, Plus, Minus, AlertTriangle } from 'lucide-react';
+import { Image as ImageIcon, X, Plus, Minus, AlertTriangle } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface ProductModalProps {
@@ -62,12 +62,20 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, onClose }) 
 
           {/* Product Hero Image */}
           <div className="relative h-56 w-full bg-slate-100 overflow-hidden shrink-0">
-            <img
-              src={product.image}
-              alt={product.name}
-              referrerPolicy="no-referrer"
-              className="h-full w-full object-cover"
-            />
+            {product.image ? (
+              <img
+                src={product.image}
+                alt={product.name}
+                referrerPolicy="no-referrer"
+                loading="lazy"
+                decoding="async"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="h-full w-full flex items-center justify-center bg-slate-100 text-slate-350">
+                <ImageIcon className="h-10 w-10" />
+              </div>
+            )}
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent" />
             <div className="absolute bottom-4 left-4 right-4 text-white">
               <span className="px-2 py-0.5 rounded-sm bg-red-650 text-[9px] font-extrabold uppercase tracking-widest leading-none block w-max mb-1.5 shadow-sm border border-red-750">

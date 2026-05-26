@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useApp } from '../../store/AppContext';
 import { Product } from '../../types';
 import { getMenuCategories } from '../../services/catalogService';
-import { ShoppingCart, Search } from 'lucide-react';
+import { Image as ImageIcon, ShoppingCart, Search } from 'lucide-react';
 import { ProductModal } from './ProductModal';
 import { CartSidebar } from './CartSidebar';
 import { AnimatePresence, motion } from 'motion/react';
@@ -131,14 +131,20 @@ export const ClientMenu: React.FC = () => {
                 >
                   {/* Image banner */}
                   <div className="h-36 bg-slate-100 relative overflow-hidden shrink-0">
-                    <img
-                      src={product.image}
-                      alt={product.name}
-                      referrerPolicy="no-referrer"
-                      loading="lazy"
-                      decoding="async"
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-103"
-                    />
+                    {product.image ? (
+                      <img
+                        src={product.image}
+                        alt={product.name}
+                        referrerPolicy="no-referrer"
+                        loading="lazy"
+                        decoding="async"
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-103"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-350">
+                        <ImageIcon className="w-8 h-8" />
+                      </div>
+                    )}
                     
                     {/* Time prep badge overlay */}
                     <div className="absolute top-2.5 right-2.5 px-2 py-0.5 bg-slate-900/75 backdrop-blur-xs rounded text-[9px] font-mono font-bold text-white uppercase tracking-wider flex items-center gap-1">
