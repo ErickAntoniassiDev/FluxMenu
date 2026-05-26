@@ -1348,13 +1348,19 @@ export const AdminPanel: React.FC = () => {
               <div className="space-y-3 border border-slate-200 rounded-xl p-4">
                 <div className="flex items-center gap-2 text-xs font-black uppercase text-slate-900"><ImageIcon className="w-4 h-4" />Logo</div>
                 {settingsDraft.logoUrl ? <img src={settingsDraft.logoUrl} alt="Logo" className="w-20 h-20 object-cover rounded-xl border border-slate-200" /> : <div className="w-20 h-20 rounded-xl border border-dashed border-slate-250 bg-slate-50 flex items-center justify-center text-slate-350"><ImageIcon className="w-5 h-5" /></div>}
-                <input type="file" accept="image/jpeg,image/png,image/webp" disabled={!canManageRestaurant || settingsLoading === 'logo'} onChange={(e) => void handleAssetUpload('logo', e.target.files?.[0] ?? null)} className="text-xs w-full" />
+                <label className={`inline-flex h-9 w-max items-center justify-center rounded-lg px-3 text-[10px] font-black uppercase text-white ${!canManageRestaurant || settingsLoading === 'logo' ? 'bg-slate-400 cursor-not-allowed' : 'bg-slate-950 hover:bg-slate-800 cursor-pointer'}`}>
+                  {settingsLoading === 'logo' ? 'Enviando logo...' : 'Enviar logo'}
+                  <input type="file" accept="image/jpeg,image/png,image/webp" disabled={!canManageRestaurant || settingsLoading === 'logo'} onChange={(e) => void handleAssetUpload('logo', e.target.files?.[0] ?? null)} className="hidden" />
+                </label>
                 <p className="text-[10px] text-slate-400 font-semibold">JPG, PNG ou WEBP. Salvo como restaurant-assets/{activeRestaurantId}/logo.webp.</p>
               </div>
               <div className="space-y-3 border border-slate-200 rounded-xl p-4">
                 <div className="flex items-center gap-2 text-xs font-black uppercase text-slate-900"><ImageIcon className="w-4 h-4" />Banner</div>
                 {settingsDraft.bannerUrl ? <img src={settingsDraft.bannerUrl} alt="Banner" className="w-full h-24 object-cover rounded-xl border border-slate-200" /> : <div className="w-full h-24 rounded-xl border border-dashed border-slate-250 bg-slate-50 flex items-center justify-center text-slate-350"><ImageIcon className="w-5 h-5" /></div>}
-                <input type="file" accept="image/jpeg,image/png,image/webp" disabled={!canManageRestaurant || settingsLoading === 'banner'} onChange={(e) => void handleAssetUpload('banner', e.target.files?.[0] ?? null)} className="text-xs w-full" />
+                <label className={`inline-flex h-9 w-max items-center justify-center rounded-lg px-3 text-[10px] font-black uppercase text-white ${!canManageRestaurant || settingsLoading === 'banner' ? 'bg-slate-400 cursor-not-allowed' : 'bg-slate-950 hover:bg-slate-800 cursor-pointer'}`}>
+                  {settingsLoading === 'banner' ? 'Enviando banner...' : 'Enviar banner'}
+                  <input type="file" accept="image/jpeg,image/png,image/webp" disabled={!canManageRestaurant || settingsLoading === 'banner'} onChange={(e) => void handleAssetUpload('banner', e.target.files?.[0] ?? null)} className="hidden" />
+                </label>
                 <p className="text-[10px] text-slate-400 font-semibold">JPG, PNG ou WEBP. Salvo como restaurant-assets/{activeRestaurantId}/banner.webp.</p>
               </div>
             </div>
