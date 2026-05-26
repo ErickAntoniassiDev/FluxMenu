@@ -32,6 +32,16 @@ export function asaasBaseUrl(): string {
   return Deno.env.get('ASAAS_BASE_URL') ?? 'https://api-sandbox.asaas.com/v3';
 }
 
+export class AsaasRequestError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'AsaasRequestError';
+    this.status = status;
+  }
+}
+
 export async function asaasFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(asaasBaseUrl().replace(/\/$/, '') + path, {
     ...init,
@@ -50,10 +60,13 @@ export async function asaasFetch<T>(path: string, init: RequestInit = {}): Promi
     } catch {
       // Avoid logging response body with sensitive data.
     }
-    throw new Error(message);
+    throw new AsaasRequestError(response.status, message);
   }
 
-  return response.json() as Promise<T>;
+  if (response.status === 204) return undefined as T;
+  const text = await response.text();
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
 }
 
 export function sanitizePlanId(planId: unknown): PlanId {

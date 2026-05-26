@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { Product, CartItem, Order, OrderStatus, Toast, RestaurantConfig, PaymentLog, UserSession, RolePermissionConfig, RestaurantId, SaaSFeature, SaaSLimit, SaaSPlan, SaaSPlanId, CategoryOption, BillingPayment, RestaurantSubscriptionStatus } from '../types';
+import { Product, CartItem, Order, OrderStatus, Toast, RestaurantConfig, PaymentLog, UserSession, RolePermissionConfig, RestaurantId, SaaSFeature, SaaSLimit, SaaSPlan, SaaSPlanId, CategoryOption, BillingPayment, BillingCustomerStatus, RestaurantSubscriptionStatus } from '../types';
 import { ROLE_PERMISSIONS } from '../utils/rbac';
 import * as CatalogService from '../services/catalogService';
 import * as OrderService from '../services/orderService';
@@ -27,6 +27,7 @@ interface AppContextType {
   currentPlanId: SaaSPlanId;
   currentSubscription: RestaurantSubscriptionStatus | null;
   billingPayments: BillingPayment[];
+  billingCustomer: BillingCustomerStatus;
   refreshBilling: () => Promise<void>;
   setCurrentPlanId: (planId: SaaSPlanId) => void;
   canUseFeature: (feature: SaaSFeature) => boolean;
@@ -138,6 +139,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const currentPlan = PlanService.getPlan(currentPlanId);
   const [currentSubscription, setCurrentSubscription] = useState<RestaurantSubscriptionStatus | null>(null);
   const [billingPayments, setBillingPayments] = useState<BillingPayment[]>([]);
+  const [billingCustomer, setBillingCustomer] = useState<BillingCustomerStatus>({ hasCpfCnpj: false, cpfCnpjMasked: null });
 
   const setCurrentPlanId = (planId: SaaSPlanId) => {
     if (supabaseConfigured && currentSubscription && currentSubscription.planId !== planId) {
@@ -488,6 +490,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const billing = await BillingService.loadBillingStatus(activeRestaurantId);
     setCurrentSubscription(billing.subscription);
     setBillingPayments(billing.payments);
+    setBillingCustomer(billing.customer);
     if (billing.subscription?.planId && billing.subscription.planId !== currentPlanId) setCurrentPlanIdState(billing.subscription.planId);
   };
 
@@ -942,6 +945,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       currentPlanId,
       currentSubscription,
       billingPayments,
+      billingCustomer,
       refreshBilling,
       setCurrentPlanId,
       canUseFeature,

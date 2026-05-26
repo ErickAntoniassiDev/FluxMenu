@@ -32,6 +32,7 @@ type FunctionPayment = {
 type BillingResponse = {
   subscription: FunctionSubscription | null;
   payments?: FunctionPayment[];
+  customer?: { hasCpfCnpj?: boolean; cpfCnpjMasked?: string | null };
 };
 
 function toSubscription(row: FunctionSubscription | null): RestaurantSubscriptionStatus | null {
@@ -62,9 +63,16 @@ function toPayment(row: FunctionPayment): BillingPayment {
   };
 }
 
-export async function loadBillingStatus(restaurantId: RestaurantId): Promise<{ subscription: RestaurantSubscriptionStatus | null; payments: BillingPayment[] }> {
+export async function loadBillingStatus(restaurantId: RestaurantId): Promise<{ subscription: RestaurantSubscriptionStatus | null; payments: BillingPayment[]; customer: { hasCpfCnpj: boolean; cpfCnpjMasked: string | null } }> {
   const response = await invokeSupabaseFunction<BillingResponse>('asaas-billing', { action: 'status', restaurantId });
-  return { subscription: toSubscription(response.subscription), payments: (response.payments ?? []).map(toPayment) };
+  return {
+    subscription: toSubscription(response.subscription),
+    payments: (response.payments ?? []).map(toPayment),
+    customer: {
+      hasCpfCnpj: response.customer?.hasCpfCnpj ?? false,
+      cpfCnpjMasked: response.customer?.cpfCnpjMasked ?? null
+    }
+  };
 }
 
 export async function createSubscription(restaurantId: RestaurantId, planId: SaaSPlanId, customer?: { name?: string; email?: string; phone?: string; cpfCnpj?: string }): Promise<RestaurantSubscriptionStatus | null> {
@@ -72,8 +80,8 @@ export async function createSubscription(restaurantId: RestaurantId, planId: Saa
   return toSubscription(response.subscription);
 }
 
-export async function changeSubscriptionPlan(restaurantId: RestaurantId, planId: SaaSPlanId): Promise<RestaurantSubscriptionStatus | null> {
-  const response = await invokeSupabaseFunction<BillingResponse>('asaas-billing', { action: 'change_plan', restaurantId, planId });
+export async function changeSubscriptionPlan(restaurantId: RestaurantId, planId: SaaSPlanId, customer?: { name?: string; email?: string; phone?: string; cpfCnpj?: string }): Promise<RestaurantSubscriptionStatus | null> {
+  const response = await invokeSupabaseFunction<BillingResponse>('asaas-billing', { action: 'change_plan', restaurantId, planId, customer: customer ?? {} });
   return toSubscription(response.subscription);
 }
 

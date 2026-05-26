@@ -58,6 +58,7 @@ export const AdminPanel: React.FC = () => {
     currentPlanId,
     currentSubscription,
     billingPayments,
+    billingCustomer,
     refreshBilling,
     currentUser,
     canUseFeature,
@@ -127,6 +128,7 @@ export const AdminPanel: React.FC = () => {
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [billingLoading, setBillingLoading] = useState<string | null>(null);
   const [billingError, setBillingError] = useState<string | null>(null);
+  const [billingCpfCnpj, setBillingCpfCnpj] = useState('');
 
   const canManageRestaurant = hasPermission('canConfigureRestaurant');
   const canManageTables = hasPermission('canManageTables');
@@ -446,10 +448,23 @@ export const AdminPanel: React.FC = () => {
     }
   };
 
+
+  const billingRoleAllowed = currentUser.role === 'owner' || currentUser.role === 'manager';
+  const normalizedBillingCpfCnpj = billingCpfCnpj.replace(/\D/g, '');
+
+  const requireBillingCpfCnpj = (): string | null => {
+    if (billingCustomer.hasCpfCnpj && !normalizedBillingCpfCnpj) return null;
+    if (normalizedBillingCpfCnpj.length === 11 || normalizedBillingCpfCnpj.length === 14) return normalizedBillingCpfCnpj;
+    setBillingError('Informe um CPF ou CNPJ válido para criar a assinatura no Asaas.');
+    return null;
+  };
+
   const handleSelectPlan = (planId: 'starter' | 'pro' | 'premium') => {
     void runBillingAction('plan-' + planId, async () => {
-      if (currentSubscription) await BillingService.changeSubscriptionPlan(activeRestaurantId, planId);
-      else await BillingService.createSubscription(activeRestaurantId, planId, { name: currentUser.name, email: currentUser.email });
+      const cpfCnpj = currentSubscription?.status !== 'canceled' && currentSubscription ? (normalizedBillingCpfCnpj || undefined) : requireBillingCpfCnpj();
+      if (cpfCnpj === null) return;
+      if (currentSubscription) await BillingService.changeSubscriptionPlan(activeRestaurantId, planId, { name: currentUser.name, email: currentUser.email, cpfCnpj });
+      else await BillingService.createSubscription(activeRestaurantId, planId, { name: currentUser.name, email: currentUser.email, cpfCnpj });
     });
   };
 
@@ -1100,8 +1115,20 @@ export const AdminPanel: React.FC = () => {
                 </div>
 
                 {billingError && <div className="mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold">{billingError}</div>}
-                {currentUser.role !== 'owner' && <div className="mt-4 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">Apenas owner pode alterar cobrança.</div>}
+                {!billingRoleAllowed && <div className="mt-4 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">Apenas owner ou manager pode alterar cobrança.</div>}
                 {currentSubscription?.status === 'past_due' && <div className="mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold">Assinatura inadimplente: recursos pagos ficam bloqueados até confirmação do pagamento pelo webhook.</div>}
+
+                <div className="mt-5 bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
+                  <label className="text-xs font-bold text-slate-500">CPF/CNPJ do cliente Asaas</label>
+                  <input
+                    value={billingCpfCnpj}
+                    onChange={(e) => setBillingCpfCnpj(e.target.value)}
+                    placeholder={billingCustomer.cpfCnpjMasked ?? 'Digite CPF ou CNPJ'}
+                    disabled={!billingRoleAllowed || billingLoading !== null}
+                    className="w-full p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 font-bold text-slate-800 disabled:opacity-60"
+                  />
+                  <p className="text-[10px] text-slate-500 font-bold">{billingCustomer.hasCpfCnpj ? 'Documento fiscal salvo: ' + (billingCustomer.cpfCnpjMasked ?? 'cadastrado') + '. Preencha novamente apenas se quiser atualizar.' : 'Obrigatório para criar cobrança no Asaas Sandbox.'}</p>
+                </div>
 
                 <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
                   {Object.values(SAAS_PLANS).map(plan => {
@@ -1112,7 +1139,7 @@ export const AdminPanel: React.FC = () => {
                         <p className="text-xs font-black font-mono text-slate-700 mt-1">{plan.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/mês</p>
                         <button
                           onClick={() => handleSelectPlan(plan.id)}
-                          disabled={currentUser.role !== 'owner' || billingLoading !== null || (isCurrent && currentSubscription?.status !== 'canceled')}
+                          disabled={!billingRoleAllowed || billingLoading !== null || (isCurrent && currentSubscription?.status !== 'canceled')}
                           className="mt-4 w-full h-9 rounded-lg bg-slate-950 text-white text-[10px] font-black uppercase disabled:opacity-50"
                         >
                           {billingLoading === 'plan-' + plan.id ? 'Processando...' : isCurrent ? 'Plano atual' : currentSubscription ? 'Alterar plano' : 'Assinar'}
@@ -1131,7 +1158,7 @@ export const AdminPanel: React.FC = () => {
                   <div className="flex justify-between border-b border-slate-100 pb-2"><span className="font-bold text-slate-500">Próximo vencimento</span><span className="font-black text-slate-900">{currentSubscription?.currentPeriodEnd?.slice(0, 10) ?? '-'}</span></div>
                 </div>
                 {currentSubscription?.checkoutUrl && <a href={currentSubscription.checkoutUrl} target="_blank" rel="noopener noreferrer" className="block h-9 rounded-lg bg-emerald-600 text-white text-[10px] font-black uppercase text-center leading-9">Abrir cobrança</a>}
-                <button onClick={handleCancelSubscription} disabled={currentUser.role !== 'owner' || !currentSubscription || billingLoading !== null || currentSubscription.status === 'canceled'} className="w-full h-9 rounded-lg border border-red-200 text-red-600 text-[10px] font-black uppercase disabled:opacity-50">
+                <button onClick={handleCancelSubscription} disabled={!billingRoleAllowed || !currentSubscription || billingLoading !== null || currentSubscription.status === 'canceled'} className="w-full h-9 rounded-lg border border-red-200 text-red-600 text-[10px] font-black uppercase disabled:opacity-50">
                   {billingLoading === 'cancel' ? 'Cancelando...' : 'Cancelar assinatura'}
                 </button>
               </div>

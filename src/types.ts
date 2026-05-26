@@ -153,6 +153,11 @@ export interface RolePermissionConfig {
 
 export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'canceled' | 'incomplete';
 
+export interface BillingCustomerStatus {
+  hasCpfCnpj: boolean;
+  cpfCnpjMasked: string | null;
+}
+
 export interface RestaurantSubscriptionStatus {
   id: string;
   restaurantId: RestaurantId;

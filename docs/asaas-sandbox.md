@@ -84,20 +84,22 @@ Marque pelo menos:
 1. Rode `supabase/asaas-billing.sql` no banco.
 2. Configure os Secrets acima.
 3. Faça deploy das duas functions.
-4. Entre no FluxMenu como `owner` de um restaurante.
+4. Entre no FluxMenu como `owner` ou `manager` de um restaurante.
 5. Abra Admin > Assinatura.
-6. Clique em `Assinar` no plano desejado.
-7. Confirme no painel Sandbox do Asaas que o cliente e assinatura foram criados.
-8. Use o link de cobranca exibido na tela de assinatura para simular pagamento no sandbox.
-9. Confirme se o webhook chegou em `billing_events` e se `subscriptions.status` mudou para `active` ou `past_due` conforme o evento.
-10. Teste upgrade/downgrade clicando em outro plano; o frontend chama `asaas-billing`, mas o preco real vem da tabela `plans` no backend.
-11. Teste cancelamento em Admin > Assinatura e confirme `subscriptions.status = canceled`.
+6. Informe CPF ou CNPJ na tela de assinatura. O Asaas Sandbox exige esse dado para criar o customer/cobranca.
+7. Clique em `Assinar` no plano desejado.
+8. Confirme no painel Sandbox do Asaas que o cliente e assinatura foram criados.
+9. Use o link de cobranca exibido na tela de assinatura para simular pagamento no sandbox.
+10. Confirme se o webhook chegou em `billing_events` e se `subscriptions.status` mudou para `active` ou `past_due` conforme o evento.
+11. Teste upgrade/downgrade clicando em outro plano; o frontend chama `asaas-billing`, mas o preco real vem da tabela `plans` no backend.
+12. Teste cancelamento em Admin > Assinatura e confirme `subscriptions.status = canceled`.
 
 ## Validacoes de seguranca
 
 - Nao existe `ASAAS_API_KEY` no frontend.
+- CPF/CNPJ nao e logado; a tela recebe de volta apenas uma versao mascarada.
 - O frontend nao envia preco, apenas `planId`.
-- Apenas `owner` pode chamar alteracoes de assinatura.
+- Apenas `owner` ou `manager` ativo do restaurante pode chamar alteracoes de assinatura.
 - Webhook rejeita chamadas sem `asaas-access-token` correto.
 - Eventos repetidos sao ignorados via `billing_events(provider, provider_event_id)`.
 - Plano manual em localStorage nao concede recursos quando Supabase esta configurado.

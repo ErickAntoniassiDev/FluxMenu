@@ -16,6 +16,22 @@ alter table public.subscriptions
 alter table public.subscriptions
   add constraint subscriptions_billing_status_check check (billing_status in ('trialing', 'active', 'past_due', 'canceled', 'incomplete'));
 
+
+
+create table if not exists public.billing_customer_data (
+  restaurant_id uuid primary key references public.restaurants(id) on delete cascade,
+  provider text not null default 'asaas',
+  provider_customer_id text,
+  name text,
+  email text,
+  phone text,
+  cpf_cnpj text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_billing_customer_data_provider_customer on public.billing_customer_data(provider, provider_customer_id);
+
 create table if not exists public.billing_payments (
   id uuid primary key default gen_random_uuid(),
   restaurant_id uuid not null references public.restaurants(id) on delete cascade,
@@ -55,6 +71,19 @@ create index if not exists idx_billing_payments_subscription on public.billing_p
 create index if not exists idx_billing_events_restaurant_processed on public.billing_events(restaurant_id, processed_at desc);
 create unique index if not exists idx_subscriptions_restaurant_unique on public.subscriptions(restaurant_id);
 create index if not exists idx_subscriptions_provider_subscription on public.subscriptions(provider, provider_subscription_id);
+
+
+alter table public.billing_customer_data enable row level security;
+
+grant select on public.billing_customer_data to authenticated;
+
+drop policy if exists billing_customer_data_select_manager on public.billing_customer_data;
+
+create policy billing_customer_data_select_manager
+on public.billing_customer_data
+for select
+to authenticated
+using (public.has_restaurant_role(restaurant_id, array['owner', 'manager']));
 
 alter table public.billing_payments enable row level security;
 alter table public.billing_events enable row level security;
