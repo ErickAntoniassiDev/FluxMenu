@@ -22,13 +22,16 @@ export const KitchenOrderCard: React.FC<KitchenOrderCardProps> = ({ order, curre
     }));
   };
 
-  // Calculate elapsed waiting times dynamically tied to Tick context state
-  const elapsedMs = currentTime - new Date(order.createdAt).getTime();
+  // Freeze the production timer once the order is ready or delivered.
+  const timerEnd = order.status === 'novo' || order.status === 'preparo'
+    ? currentTime
+    : new Date(order.updatedAt || order.createdAt).getTime();
+  const elapsedMs = Math.max(0, timerEnd - new Date(order.createdAt).getTime());
   const elapsedMinutes = Math.floor(elapsedMs / 1000 / 60);
-  const elapsedSeconds = Math.floor((elapsedMs / 1000) % 65);
+  const elapsedSeconds = Math.floor((elapsedMs / 1000) % 60);
 
-  // Consider an order delayed in peak periods if waiting more than 10 minutes and not yet delivered
-  const isDelayed = order.status !== 'entregue' && elapsedMinutes >= 10;
+  // Consider delayed only while the kitchen is still producing it.
+  const isDelayed = (order.status === 'novo' || order.status === 'preparo') && elapsedMinutes >= 10;
 
   // Visual style definitions - Resto das cores tem que ser fortes
   const priorityStyles = {

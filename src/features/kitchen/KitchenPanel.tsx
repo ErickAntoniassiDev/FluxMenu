@@ -30,9 +30,9 @@ export const KitchenPanel: React.FC = () => {
       else if (order.status === 'preparo') prepCount++;
       else if (order.status === 'pronto') prontoCount++;
 
-      // Delayed: more than 10 mins and not served
+      // Delayed only matters while the kitchen is still producing the order.
       const elapsedMins = (currentTime - new Date(order.createdAt).getTime()) / 1000 / 60;
-      if (order.status !== 'entregue' && elapsedMins >= 10) {
+      if ((order.status === 'novo' || order.status === 'preparo') && elapsedMins >= 10) {
         delayedCount++;
       }
     });

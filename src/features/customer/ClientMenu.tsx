@@ -7,6 +7,17 @@ import { ProductModal } from './ProductModal';
 import { CartSidebar } from './CartSidebar';
 import { AnimatePresence, motion } from 'motion/react';
 
+
+function getReadableTextColor(hexColor: string): '#0f172a' | '#ffffff' {
+  const normalized = hexColor.trim().replace('#', '');
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return '#ffffff';
+  const r = parseInt(normalized.slice(0, 2), 16);
+  const g = parseInt(normalized.slice(2, 4), 16);
+  const b = parseInt(normalized.slice(4, 6), 16);
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luminance > 0.62 ? '#0f172a' : '#ffffff';
+}
+
 export const ClientMenu: React.FC = () => {
   const { activeRestaurantId, canUseFeature, products, cart, tableNumber, publicRouteError, restaurantConfig } = useApp();
   const categories = getMenuCategories(activeRestaurantId);
@@ -31,6 +42,8 @@ export const ClientMenu: React.FC = () => {
 
   const primaryColor = restaurantConfig.primaryColor || '#dc2626';
   const secondaryColor = restaurantConfig.secondaryColor || '#0f172a';
+  const primaryTextColor = getReadableTextColor(primaryColor);
+  const primarySoftBackground = primaryTextColor === '#ffffff' ? 'rgba(15, 23, 42, 0.22)' : 'rgba(15, 23, 42, 0.08)';
   const todayKey = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
   const todayHours = restaurantConfig.openingHours?.[todayKey];
   const todayHoursLabel = typeof todayHours === 'string'
@@ -137,7 +150,7 @@ export const ClientMenu: React.FC = () => {
                 : 'bg-slate-55 text-slate-500 hover:text-slate-800 hover:bg-slate-100 border-transparent'
             }`}
             id={`category-tab-${cat.id}`}
-            style={selectedCategory === cat.id ? { backgroundColor: primaryColor, borderColor: primaryColor } : undefined}
+            style={selectedCategory === cat.id ? { backgroundColor: primaryColor, borderColor: primaryColor, color: primaryTextColor } : undefined}
           >
             {cat.label}
           </button>
@@ -251,23 +264,23 @@ export const ClientMenu: React.FC = () => {
               onClick={() => setIsCartOpen(true)}
               type="button"
               aria-label="Abrir carrinho"
-              className="w-full text-white rounded-xl py-3.5 px-4 flex items-center justify-between shadow-lg hover:shadow-xl transition active:scale-98 cursor-pointer border"
-              style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
+              className="w-full rounded-xl py-3.5 px-4 flex items-center justify-between shadow-lg hover:shadow-xl transition active:scale-98 cursor-pointer border"
+              style={{ backgroundColor: primaryColor, borderColor: primaryColor, color: primaryTextColor }}
             >
               <div className="flex items-center gap-2.5">
-                <span className="relative p-1.5 rounded-lg bg-red-750">
+                <span className="relative p-1.5 rounded-lg" style={{ backgroundColor: primarySoftBackground }}>
                   <ShoppingCart className="w-4 h-4" />
-                  <span className="absolute -top-1.5 -right-1.5 bg-white text-red-650 text-[9px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center shadow-xs">
+                  <span className="absolute -top-1.5 -right-1.5 text-[9px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center shadow-xs" style={{ backgroundColor: primaryTextColor, color: primaryColor }}>
                     {cartItemCount}
                   </span>
                 </span>
                 <div className="text-left leading-none">
                   <span className="text-[10px] font-black uppercase tracking-wider block font-black">Ver Carrinho</span>
-                  <span className="text-[9px] text-red-100 mt-0.5 block font-semibold">{tableNumber} • Mesa selecionada</span>
+                  <span className="text-[9px] mt-0.5 block font-semibold" style={{ color: primaryTextColor }}>{tableNumber} • Mesa selecionada</span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5 font-mono text-xs font-black bg-red-750/50 px-3 py-1.5 rounded-lg">
+              <div className="flex items-center gap-1.5 font-mono text-xs font-black px-3 py-1.5 rounded-lg" style={{ backgroundColor: primarySoftBackground }}>
                 <span>Total:</span>
                 <span>{cartTotalVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
               </div>
