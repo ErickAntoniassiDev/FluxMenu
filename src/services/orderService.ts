@@ -26,6 +26,7 @@ export async function loadOrdersWithFallback(restaurantId: RestaurantId): Promis
     return { orders, source: 'supabase' };
   } catch (error) {
     logSupabaseFallback('orders', error);
+    if (import.meta.env.PROD) throw error;
   }
 
   const orders = getOrders(restaurantId);
@@ -45,6 +46,17 @@ export async function createOrderInSupabase(cart: CartItem[], tableNumber: strin
   });
   logDataSource('order create', 'supabase', { restaurantId, orderId: order.id });
   return order;
+}
+
+
+export async function getPublicOrderStatuses(restaurantId: RestaurantId, publicCodes: string[]): Promise<OrderSupabaseRepository.PublicOrderStatus[]> {
+  return OrderSupabaseRepository.getPublicOrderStatuses(restaurantId, publicCodes);
+}
+
+
+export async function cancelOrderFromKds(orderId: string, restaurantId: RestaurantId): Promise<void> {
+  await OrderSupabaseRepository.cancelOrderFromKds(restaurantId, orderId);
+  logDataSource('order cancel from KDS', 'supabase', { restaurantId, orderId });
 }
 
 export async function updateOrderStatusInSupabase(orderId: string, restaurantId: RestaurantId, nextStatus: OrderStatus): Promise<Order> {

@@ -53,8 +53,10 @@ export async function loadPlansWithFallback(): Promise<PlansLoadResult> {
       logDataSource('plans/subscriptions', 'supabase', { plans: plans.length, subscriptions: subscriptions.length });
       return { plans: getPlans(), subscriptions: subscriptions.map(subscription => ({ ...subscription })), source: 'supabase' };
     }
+    if (import.meta.env.PROD) throw new Error('Nenhum plano ativo encontrado no Supabase.');
   } catch (error) {
     logSupabaseFallback('plans/subscriptions', error);
+    if (import.meta.env.PROD) throw error;
   }
 
   plansCache = null;

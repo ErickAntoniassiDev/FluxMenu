@@ -44,6 +44,25 @@ type RpcOrderItem = {
   observation?: string | null;
 };
 
+
+type PublicOrderStatusPayload = {
+  public_code: string;
+  restaurant_id: string;
+  table_label_snapshot: string;
+  status: OrderStatus;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PublicOrderStatus = {
+  id: string;
+  restaurantId: RestaurantId;
+  table: string;
+  status: OrderStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type RpcOrderPayload = {
   id: string;
   public_code: string;
@@ -139,6 +158,32 @@ export async function createOrderFromQr(input: CreateOrderInput): Promise<Order>
   });
 
   return mapRpcOrder(created);
+}
+
+
+export async function getPublicOrderStatuses(restaurantId: RestaurantId, publicCodes: string[]): Promise<PublicOrderStatus[]> {
+  if (publicCodes.length === 0) return [];
+  const rows = await callSupabaseRpc<PublicOrderStatusPayload[]>('get_public_order_statuses', {
+    p_restaurant_id: restaurantId,
+    p_public_codes: publicCodes
+  });
+
+  return rows.map(row => ({
+    id: row.public_code,
+    restaurantId: row.restaurant_id,
+    table: row.table_label_snapshot,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  }));
+}
+
+
+export async function cancelOrderFromKds(restaurantId: RestaurantId, publicCode: string): Promise<void> {
+  await callSupabaseRpc('cancel_order_from_kds', {
+    p_restaurant_id: restaurantId,
+    p_public_code: publicCode
+  });
 }
 
 export async function updateOrderStatus(restaurantId: RestaurantId, publicCode: string, nextStatus: OrderStatus): Promise<Order> {

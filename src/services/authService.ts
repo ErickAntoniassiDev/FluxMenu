@@ -76,12 +76,9 @@ export async function registerRestaurant(input: RegisterRestaurantInput): Promis
   return { session, onboarding: null };
 }
 
-export async function completePendingOnboarding(session: SupabaseAuthSession, setup?: RestaurantOnboardingSetup): Promise<OnboardingRepository.OnboardingResult | null> {
-  const pending = getPendingOnboarding(session.user.email);
-  if (!pending && !setup) return null;
-  const restaurantName = setup?.restaurantName ?? pending?.restaurantName;
-  if (!restaurantName) return null;
-  const onboarding = await OnboardingRepository.createRestaurantOnboarding(restaurantName, setup?.planId ?? 'starter', setup);
+export async function completePendingOnboarding(_session: SupabaseAuthSession, setup?: RestaurantOnboardingSetup): Promise<OnboardingRepository.OnboardingResult | null> {
+  if (!setup) return null;
+  const onboarding = await OnboardingRepository.createRestaurantOnboarding(setup.restaurantName, setup.planId, setup);
   clearPendingOnboarding();
   return onboarding;
 }

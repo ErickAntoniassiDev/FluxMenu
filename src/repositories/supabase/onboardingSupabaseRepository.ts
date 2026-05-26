@@ -22,6 +22,15 @@ export async function createRestaurantOnboarding(restaurantName: string, planId:
     p_restaurant_name: restaurantName,
     p_plan_id: planId,
     p_setup: setup ? {
+      publicName: setup.publicName,
+      phone: setup.phone,
+      address: setup.address,
+      instagram: setup.instagram,
+      operationType: setup.operationType,
+      deliveryEstimate: setup.deliveryEstimate,
+      primaryColor: setup.primaryColor,
+      secondaryColor: setup.secondaryColor,
+      openingHours: setup.openingHours,
       tables: setup.tables,
       categories: setup.categories,
       products: setup.products

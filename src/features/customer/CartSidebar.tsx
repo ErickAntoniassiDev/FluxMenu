@@ -3,6 +3,17 @@ import { useApp } from '../../store/AppContext';
 import { Image as ImageIcon, X, Trash2, ArrowRight, Table, AlertCircle, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
+
+function getReadableTextColor(hexColor: string): '#0f172a' | '#ffffff' {
+  const normalized = hexColor.trim().replace('#', '');
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return '#ffffff';
+  const r = parseInt(normalized.slice(0, 2), 16);
+  const g = parseInt(normalized.slice(2, 4), 16);
+  const b = parseInt(normalized.slice(4, 6), 16);
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luminance > 0.62 ? '#0f172a' : '#ffffff';
+}
+
 interface CartSidebarProps {
   isOpen: boolean;
   onClose: () => void;
@@ -15,10 +26,13 @@ export const CartSidebar: React.FC<CartSidebarProps> = ({ isOpen, onClose }) => 
     updateCartQuantity,
     getCartTotal,
     confirmOrder,
-    tableNumber
+    tableNumber,
+    restaurantConfig
   } = useApp();
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const secondaryColor = restaurantConfig.secondaryColor || '#0f172a';
+  const secondaryTextColor = getReadableTextColor(secondaryColor);
 
   const handleConfirmOrder = async () => {
     if (cart.length === 0 || isSubmitting) return;
@@ -192,7 +206,8 @@ export const CartSidebar: React.FC<CartSidebarProps> = ({ isOpen, onClose }) => 
                   <button
                     onClick={handleConfirmOrder}
                     disabled={isSubmitting}
-                    className="w-full h-12 bg-slate-950 hover:bg-slate-855 disabled:bg-slate-400 text-white rounded-xl text-xs font-black tracking-widest flex items-center justify-center gap-2 shadow-md transition cursor-pointer"
+                    className="w-full h-12 disabled:bg-slate-400 rounded-xl text-xs font-black tracking-widest flex items-center justify-center gap-2 shadow-md transition cursor-pointer"
+                      style={{ backgroundColor: isSubmitting ? undefined : secondaryColor, color: isSubmitting ? undefined : secondaryTextColor }}
                     id="confirm-order-submit-btn"
                   >
                     {isSubmitting ? (

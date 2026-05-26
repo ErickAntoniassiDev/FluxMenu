@@ -78,6 +78,13 @@ const RouteSynchronizer: React.FC<{ children: React.ReactNode }> = ({ children }
       ?? (isPublicRestaurantRoute ? routeParts[2] : null)
       ?? (routerParts[0] === 'client' ? routerParts[2] : null);
 
+    const isPublicClientRoute = isPublicRestaurantRoute || routerParts[0] === 'client';
+
+    if (isPublicClientRoute && !restaurantSlug) {
+      setPublicRouteError('URL incompleta. Acesse pelo QR Code da mesa ou por um link com o restaurante.');
+      return;
+    }
+
     if (!restaurantSlug && !tableParam) {
       setPublicRouteError(null);
       return;
@@ -115,15 +122,16 @@ const RouteSynchronizer: React.FC<{ children: React.ReactNode }> = ({ children }
 };
 
 const SmartRoot: React.FC = () => {
-  const { authLoading, isAuthenticated, hasActiveRestaurant, currentUser } = useApp();
+  const { authLoading, isAuthenticated, hasActiveRestaurant, hasBillingEntitlement, currentUser } = useApp();
   if (authLoading) return <ScreenLoading label="Carregando sessão..." />
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (!hasActiveRestaurant) return <Navigate to="/onboarding" replace />;
+  if (!hasBillingEntitlement) return <Navigate to="/onboarding" replace />;
   return <Navigate to={getDefaultRouteForRole(currentUser.role)} replace />;
 };
 
 const ProtectedView: React.FC<{ mode: AppMode; children: React.ReactNode }> = ({ mode, children }) => {
-  const { authLoading, isAuthenticated, hasActiveRestaurant, currentUser, activeRestaurantId, setActiveRestaurantId, isModeAllowed } = useApp();
+  const { authLoading, isAuthenticated, hasActiveRestaurant, hasBillingEntitlement, currentUser, activeRestaurantId, setActiveRestaurantId, isModeAllowed } = useApp();
 
   useEffect(() => {
     if (!authLoading && isAuthenticated && hasActiveRestaurant && currentUser.restaurantId !== activeRestaurantId) {
@@ -134,6 +142,7 @@ const ProtectedView: React.FC<{ mode: AppMode; children: React.ReactNode }> = ({
   if (authLoading) return <ScreenLoading label="Carregando sessão..." />
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (!hasActiveRestaurant) return <Navigate to="/onboarding" replace />;
+  if (!hasBillingEntitlement) return <Navigate to="/onboarding" replace />;
   if (currentUser.restaurantId !== activeRestaurantId) return <ScreenLoading label="Sincronizando restaurante..." />
   if (!isModeAllowed(mode)) return <Navigate to={getDefaultRouteForRole(currentUser.role)} replace />;
   return <>{children}</>;
@@ -158,7 +167,7 @@ const OperationalShell: React.FC<{ mode: AppMode; children: React.ReactNode }> =
 };
 
 const AppContent: React.FC = () => {
-  const { authLoading, isAuthenticated, hasActiveRestaurant, activeMode } = useApp();
+  const { authLoading, isAuthenticated, hasActiveRestaurant, hasBillingEntitlement, activeMode } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
   const path = location.pathname;
@@ -191,14 +200,15 @@ const AppContent: React.FC = () => {
 
   if (path === '/login') {
     if (authLoading) return <div className="h-screen w-screen"><ScreenLoading label="Carregando sessão..." /></div>;
-    if (isAuthenticated && hasActiveRestaurant) return <Navigate to="/admin" replace />;
+    if (isAuthenticated && hasActiveRestaurant && hasBillingEntitlement) return <Navigate to="/admin" replace />;
+    if (isAuthenticated && hasActiveRestaurant && !hasBillingEntitlement) return <Navigate to="/onboarding" replace />;
     if (isAuthenticated && !hasActiveRestaurant) return <Navigate to="/onboarding" replace />;
     return <div className="h-screen w-screen bg-slate-50 font-sans"><Suspense fallback={<ScreenLoading />}><LoginScreen /></Suspense><ToastContainer /></div>;
   }
 
   if (path === '/onboarding') {
     if (!authLoading && !isAuthenticated) return <Navigate to="/login" replace />;
-    if (!authLoading && isAuthenticated && hasActiveRestaurant) return <Navigate to="/admin" replace />;
+    if (!authLoading && isAuthenticated && hasActiveRestaurant && hasBillingEntitlement) return <Navigate to="/admin" replace />;
     return <div className="h-screen w-screen bg-slate-50 font-sans"><Suspense fallback={<ScreenLoading />}><OnboardingScreen /></Suspense><ToastContainer /></div>;
   }
 

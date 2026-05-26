@@ -35,6 +35,8 @@ export interface SaaSPlan {
 
 export interface OnboardingTableInput {
   label: string;
+  slug?: string;
+  active?: boolean;
 }
 
 export interface OnboardingCategoryInput {
@@ -49,9 +51,20 @@ export interface OnboardingProductInput {
   prepTimeMinutes: number;
 }
 
+export type RestaurantOperationType = 'salon' | 'delivery' | 'pickup' | 'salon_delivery';
+
 export interface RestaurantOnboardingSetup {
   restaurantName: string;
+  publicName: string;
   planId: SaaSPlanId;
+  phone?: string;
+  address?: string;
+  instagram?: string;
+  operationType?: RestaurantOperationType;
+  deliveryEstimate?: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  openingHours?: Record<string, OpeningHoursDay>;
   tables: OnboardingTableInput[];
   categories: OnboardingCategoryInput[];
   products: OnboardingProductInput[];

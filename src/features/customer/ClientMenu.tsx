@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useApp } from '../../store/AppContext';
-import { Product } from '../../types';
+import { OrderStatus, Product } from '../../types';
 import { getMenuCategories } from '../../services/catalogService';
-import { Clock, Image as ImageIcon, Instagram, MapPin, ShoppingCart, Search, Star } from 'lucide-react';
+import { CheckCircle, Clock, Image as ImageIcon, Instagram, MapPin, PackageCheck, Search, ShoppingCart, Star } from 'lucide-react';
 import { ProductModal } from './ProductModal';
 import { CartSidebar } from './CartSidebar';
 import { AnimatePresence, motion } from 'motion/react';
@@ -18,8 +18,24 @@ function getReadableTextColor(hexColor: string): '#0f172a' | '#ffffff' {
   return luminance > 0.62 ? '#0f172a' : '#ffffff';
 }
 
+
+function formatTableLabel(tableNumber: string): string {
+  const value = tableNumber.trim();
+  if (!value) return 'Mesa';
+  return /^mesa\b/i.test(value) ? value : 'Mesa ' + value;
+}
+
+const orderStatusLabels: Record<OrderStatus, string> = {
+  novo: 'Recebido',
+  preparo: 'Em preparo',
+  pronto: 'Pronto',
+  entregue: 'Entregue'
+};
+
+const orderStatusSteps: OrderStatus[] = ['novo', 'preparo', 'pronto', 'entregue'];
+
 export const ClientMenu: React.FC = () => {
-  const { activeRestaurantId, canUseFeature, products, cart, tableNumber, publicRouteError, restaurantConfig } = useApp();
+  const { activeRestaurantId, canUseFeature, products, cart, orders, tableNumber, publicRouteError, restaurantConfig, refreshPublicOrderStatuses } = useApp();
   const categories = getMenuCategories(activeRestaurantId);
   const canRemoveBranding = canUseFeature('remove_fluxmenu_branding');
 
@@ -43,7 +59,12 @@ export const ClientMenu: React.FC = () => {
   const primaryColor = restaurantConfig.primaryColor || '#dc2626';
   const secondaryColor = restaurantConfig.secondaryColor || '#0f172a';
   const primaryTextColor = getReadableTextColor(primaryColor);
-  const primarySoftBackground = primaryTextColor === '#ffffff' ? 'rgba(15, 23, 42, 0.22)' : 'rgba(15, 23, 42, 0.08)';
+  const secondaryTextColor = getReadableTextColor(secondaryColor);
+  const headerAccentColor = primaryTextColor === '#ffffff' ? '#ffffff' : primaryColor;
+  const primaryAccentOnLight = primaryTextColor === '#ffffff' ? primaryColor : '#0f172a';
+  const secondaryAccentOnLight = secondaryTextColor === '#ffffff' ? secondaryColor : '#0f172a';
+  const primarySoftBackground = primaryTextColor === '#ffffff' ? primaryColor + '18' : 'rgba(15, 23, 42, 0.08)';
+  const secondarySoftBackground = secondaryTextColor === '#ffffff' ? 'rgba(15, 23, 42, 0.22)' : 'rgba(15, 23, 42, 0.08)';
   const todayKey = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
   const todayHours = restaurantConfig.openingHours?.[todayKey];
   const todayHoursLabel = typeof todayHours === 'string'
@@ -54,6 +75,22 @@ export const ClientMenu: React.FC = () => {
         ? todayHours.open + '-' + todayHours.close
         : null;
   const instagramHandle = restaurantConfig.instagram?.replace(/^@/, '').trim();
+  const tableLabel = formatTableLabel(tableNumber);
+  const visibleOrders = useMemo(() => {
+    return orders
+      .filter(order => order.table === tableNumber || order.table === tableLabel)
+      .filter(order => order.status !== 'entregue')
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 3);
+  }, [orders, tableLabel, tableNumber]);
+
+  useEffect(() => {
+    const publicCodes = visibleOrders.map(order => order.id);
+    if (publicCodes.length === 0) return;
+    void refreshPublicOrderStatuses(publicCodes);
+    const interval = window.setInterval(() => void refreshPublicOrderStatuses(publicCodes), 6000);
+    return () => window.clearInterval(interval);
+  }, [refreshPublicOrderStatuses, visibleOrders]);
 
   // Cart indicators
   const cartItemCount = cart.reduce((acc, item) => acc + item.quantity, 0);
@@ -92,15 +129,15 @@ export const ClientMenu: React.FC = () => {
             <div className="min-w-0 flex-1">
               <h2 className="text-lg md:text-xl font-extrabold uppercase tracking-tight truncate">{restaurantConfig.name}</h2>
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold uppercase text-white/85">
-                {restaurantConfig.rating && <span className="inline-flex items-center gap-1"><Star className="w-3 h-3" style={{ color: primaryColor }} />{restaurantConfig.rating}</span>}
+                {restaurantConfig.rating && <span className="inline-flex items-center gap-1"><Star className="w-3 h-3" style={{ color: headerAccentColor }} />{restaurantConfig.rating}</span>}
                 {restaurantConfig.deliveryEstimate && <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" />{restaurantConfig.deliveryEstimate}</span>}
                 {todayHoursLabel && <span>{todayHoursLabel}</span>}
                 {restaurantConfig.address && <span className="inline-flex items-center gap-1 min-w-0"><MapPin className="w-3 h-3 shrink-0" /><span className="truncate max-w-[14rem]">{restaurantConfig.address}</span></span>}
                 {instagramHandle && <span className="inline-flex items-center gap-1"><Instagram className="w-3 h-3" />@{instagramHandle}</span>}
               </div>
               <p className="text-[10px] text-white/65 font-bold uppercase mt-1 tracking-wider">
-                Mesa {tableNumber}. Selecione seus itens e envie para a cozinha.
-                {!canRemoveBranding && <span className="ml-1" style={{ color: primaryColor }}>Powered by FluxMenu</span>}
+                {tableLabel}. Selecione seus itens e envie para a cozinha.
+                {!canRemoveBranding && <span className="ml-1" style={{ color: headerAccentColor }}>Powered by FluxMenu</span>}
               </p>
             </div>
           </div>
@@ -126,7 +163,7 @@ export const ClientMenu: React.FC = () => {
           <a
             href="#/portal"
             className="px-3 py-2 rounded-xl text-[10px] uppercase font-black tracking-wider border bg-white hover:bg-slate-50 transition flex items-center gap-1.5 cursor-pointer select-none"
-            style={{ color: primaryColor, borderColor: primaryColor + '33' }}
+            style={{ color: secondaryAccentOnLight, borderColor: secondaryColor + '55' }}
             aria-label="Acessar portal administrativo"
             title="Clique para acessar o Portal Administrativo com perfis operacionais, KDS de Cozinha e Caixa"
           >
@@ -159,6 +196,53 @@ export const ClientMenu: React.FC = () => {
 
       {/* Primary Products list cards viewport */}
       <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-24">
+        {visibleOrders.length > 0 && (
+          <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs" id="customer-order-progress">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: primarySoftBackground, color: primaryAccentOnLight }}>
+                  <PackageCheck className="w-4 h-4" />
+                </span>
+                <div className="min-w-0">
+                  <h3 className="text-xs font-black uppercase text-slate-900 tracking-tight">Acompanhe seu pedido</h3>
+                  <p className="text-[10px] text-slate-500 font-semibold truncate">Atualiza automaticamente quando a cozinha muda o status.</p>
+                </div>
+              </div>
+              <span className="text-[10px] font-black uppercase text-slate-500 shrink-0">{tableLabel}</span>
+            </div>
+
+            <div className="space-y-3">
+              {visibleOrders.map(order => {
+                const currentIndex = Math.max(0, orderStatusSteps.indexOf(order.status));
+                return (
+                  <div key={order.id} className="rounded-xl bg-slate-50 border border-slate-100 p-3">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <span className="text-[10px] font-black uppercase text-slate-700">Pedido {order.id}</span>
+                      <span className="text-[10px] font-black uppercase" style={{ color: primaryAccentOnLight }}>{orderStatusLabels[order.status]}</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {orderStatusSteps.map((status, index) => {
+                        const isDone = index <= currentIndex;
+                        return (
+                          <div key={status} className="min-w-0">
+                            <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                              <div className="h-full rounded-full transition-all" style={{ width: isDone ? '100%' : '0%', backgroundColor: primaryAccentOnLight }} />
+                            </div>
+                            <div className={`mt-1 flex items-center gap-1 text-[8px] font-black uppercase ${isDone ? 'text-slate-800' : 'text-slate-400'}`}>
+                              {isDone && <CheckCircle className="w-2.5 h-2.5 shrink-0" style={{ color: primaryAccentOnLight }} />}
+                              <span className="truncate">{orderStatusLabels[status]}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {filteredProducts.length === 0 ? (
           <div className="h-44 flex flex-col items-center justify-center text-center text-slate-400">
             <span className="text-xl">🍽️</span>
@@ -235,7 +319,7 @@ export const ClientMenu: React.FC = () => {
                       </span>
                       
                       {isAvailable ? (
-                        <button type="button" aria-label={`Adicionar ${product.name}`} className="px-2.5 py-1.5 rounded-lg bg-white font-black text-[10px] transition cursor-pointer select-none border" style={{ color: primaryColor, borderColor: primaryColor + '33' }}>
+                        <button type="button" aria-label={`Adicionar ${product.name}`} className="px-2.5 py-1.5 rounded-lg bg-white font-black text-[10px] transition cursor-pointer select-none border" style={{ color: secondaryAccentOnLight, borderColor: secondaryColor + '55' }}>
                           + Adicionar
                         </button>
                       ) : (
@@ -265,22 +349,22 @@ export const ClientMenu: React.FC = () => {
               type="button"
               aria-label="Abrir carrinho"
               className="w-full rounded-xl py-3.5 px-4 flex items-center justify-between shadow-lg hover:shadow-xl transition active:scale-98 cursor-pointer border"
-              style={{ backgroundColor: primaryColor, borderColor: primaryColor, color: primaryTextColor }}
+              style={{ backgroundColor: secondaryColor, borderColor: secondaryColor, color: secondaryTextColor }}
             >
               <div className="flex items-center gap-2.5">
-                <span className="relative p-1.5 rounded-lg" style={{ backgroundColor: primarySoftBackground }}>
+                <span className="relative p-1.5 rounded-lg" style={{ backgroundColor: secondarySoftBackground }}>
                   <ShoppingCart className="w-4 h-4" />
-                  <span className="absolute -top-1.5 -right-1.5 text-[9px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center shadow-xs" style={{ backgroundColor: primaryTextColor, color: primaryColor }}>
+                  <span className="absolute -top-1.5 -right-1.5 text-[9px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center shadow-xs" style={{ backgroundColor: secondaryTextColor, color: secondaryColor }}>
                     {cartItemCount}
                   </span>
                 </span>
                 <div className="text-left leading-none">
                   <span className="text-[10px] font-black uppercase tracking-wider block font-black">Ver Carrinho</span>
-                  <span className="text-[9px] mt-0.5 block font-semibold" style={{ color: primaryTextColor }}>{tableNumber} • Mesa selecionada</span>
+                  <span className="text-[9px] mt-0.5 block font-semibold" style={{ color: secondaryTextColor }}>{tableLabel} • selecionada</span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5 font-mono text-xs font-black px-3 py-1.5 rounded-lg" style={{ backgroundColor: primarySoftBackground }}>
+              <div className="flex items-center gap-1.5 font-mono text-xs font-black px-3 py-1.5 rounded-lg" style={{ backgroundColor: secondarySoftBackground }}>
                 <span>Total:</span>
                 <span>{cartTotalVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
               </div>

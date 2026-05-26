@@ -61,6 +61,7 @@ export async function loadProductsWithFallback(): Promise<CatalogLoadResult> {
     return { products: mappedProducts, source: 'supabase' };
   } catch (error) {
     logSupabaseFallback('catalog', error);
+    if (import.meta.env.PROD) throw error;
   }
 
   productCategoriesCache = null;
@@ -81,6 +82,7 @@ export async function getProductCategoriesWithFallback(restaurantId: RestaurantI
     return getProductCategories(restaurantId);
   } catch (error) {
     logSupabaseFallback('categories', error);
+    if (import.meta.env.PROD) throw error;
   }
 
   productCategoriesCache = null;

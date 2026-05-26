@@ -34,21 +34,20 @@ export async function loadRestaurantsWithFallback(): Promise<RestaurantsLoadResu
       RestaurantSupabaseRepository.findAllRestaurantProfiles()
     ]);
 
-    if (restaurants.length > 0) {
-      restaurantsCache = restaurants;
-      restaurantProfilesCache = profiles.length > 0 ? profiles : restaurants.map(restaurant => ({
-        restaurantId: restaurant.id,
-        name: restaurant.name,
-        rating: '4.9',
-        deliveryEstimate: '15-25 min',
-        address: '',
-        instagram: ''
-      }));
-      logDataSource('restaurants', 'supabase', { restaurants: restaurantsCache.length, settings: restaurantProfilesCache.length });
-      return { restaurants: getRestaurants(), profiles: getRestaurantProfiles(), source: 'supabase' };
-    }
+    restaurantsCache = restaurants;
+    restaurantProfilesCache = profiles.length > 0 ? profiles : restaurants.map(restaurant => ({
+      restaurantId: restaurant.id,
+      name: restaurant.name,
+      rating: '4.9',
+      deliveryEstimate: '15-25 min',
+      address: '',
+      instagram: ''
+    }));
+    logDataSource('restaurants', 'supabase', { restaurants: restaurantsCache.length, settings: restaurantProfilesCache.length });
+    return { restaurants: getRestaurants(), profiles: getRestaurantProfiles(), source: 'supabase' };
   } catch (error) {
     logSupabaseFallback('restaurants', error);
+    if (import.meta.env.PROD) throw error;
   }
 
   restaurantsCache = null;

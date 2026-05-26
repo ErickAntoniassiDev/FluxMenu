@@ -4,19 +4,34 @@ import { useApp } from '../../store/AppContext';
 import { Image as ImageIcon, X, Plus, Minus, AlertTriangle } from 'lucide-react';
 import { motion } from 'motion/react';
 
+
+function getReadableTextColor(hexColor: string): '#0f172a' | '#ffffff' {
+  const normalized = hexColor.trim().replace('#', '');
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return '#ffffff';
+  const r = parseInt(normalized.slice(0, 2), 16);
+  const g = parseInt(normalized.slice(2, 4), 16);
+  const b = parseInt(normalized.slice(4, 6), 16);
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luminance > 0.62 ? '#0f172a' : '#ffffff';
+}
+
 interface ProductModalProps {
   product: Product | null;
   onClose: () => void;
 }
 
 export const ProductModal: React.FC<ProductModalProps> = ({ product, onClose }) => {
-  const { addToCart } = useApp();
+  const { addToCart, restaurantConfig } = useApp();
   const [quantity, setQuantity] = useState<number>(1);
   const [observation, setObservation] = useState<string>('');
   const [isAllergy, setIsAllergy] = useState<boolean>(false);
   const [allergyDetails, setAllergyDetails] = useState<string>('');
 
   if (!product) return null;
+
+  const secondaryColor = restaurantConfig.secondaryColor || '#0f172a';
+  const secondaryTextColor = getReadableTextColor(secondaryColor);
+  const secondarySoftBackground = secondaryTextColor === '#ffffff' ? 'rgba(15, 23, 42, 0.22)' : 'rgba(15, 23, 42, 0.08)';
 
   const handleIncrement = () => setQuantity(prev => prev + 1);
   const handleDecrement = () => setQuantity(prev => (prev > 1 ? prev - 1 : 1));
@@ -194,11 +209,12 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, onClose }) 
             {/* Big checkout sum & action submit button - Vermelho no Rosa */}
             <button
               onClick={handleAdd}
-              className="flex-1 h-12 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black tracking-widest flex items-center justify-between px-5 transition active:scale-98 shadow-md cursor-pointer border border-red-700"
+              className="flex-1 h-12 rounded-xl text-xs font-black tracking-widest flex items-center justify-between px-5 transition active:scale-98 shadow-md cursor-pointer border"
+              style={{ backgroundColor: secondaryColor, borderColor: secondaryColor, color: secondaryTextColor }}
               id="btn-add-to-cart-submit"
             >
               <span>ADICIONAR AO TOTAL</span>
-              <span className="font-mono bg-red-750 font-black px-3 py-1 rounded-lg">
+              <span className="font-mono font-black px-3 py-1 rounded-lg" style={{ backgroundColor: secondarySoftBackground }}>
                 {totalPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
               </span>
             </button>

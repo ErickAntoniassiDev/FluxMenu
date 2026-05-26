@@ -36,6 +36,7 @@ export async function loadTablesWithFallback(): Promise<TablesLoadResult> {
     return { tablesByRestaurant: { ...tablesCache }, source: 'supabase' };
   } catch (error) {
     logSupabaseFallback('restaurant_tables', error);
+    if (import.meta.env.PROD) throw error;
   }
 
   tablesCache = null;

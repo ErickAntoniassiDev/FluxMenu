@@ -12,6 +12,7 @@ import * as AuthService from '../services/authService';
 import * as BillingService from '../services/billingService';
 import { isSupabaseConfigured, SupabaseAuthSession } from '../lib/supabase/client';
 import * as FeatureGateService from '../services/featureGateService';
+import { OnboardingResult } from '../repositories/supabase/onboardingSupabaseRepository';
 
 interface AppContextType {
   authSession: SupabaseAuthSession | null;
@@ -19,7 +20,7 @@ interface AppContextType {
   authError: string | null;
   isAuthenticated: boolean;
   hasActiveRestaurant: boolean;
-  createRestaurantForCurrentUser: (setup: RestaurantOnboardingSetup) => Promise<void>;
+  createRestaurantForCurrentUser: (setup: RestaurantOnboardingSetup) => Promise<OnboardingResult>;
   login: (email: string, password: string) => Promise<void>;
   registerRestaurant: (email: string, password: string, restaurantName: string) => Promise<void>;
   resendConfirmationEmail: (email: string) => Promise<void>;
@@ -27,6 +28,7 @@ interface AppContextType {
   currentPlan: SaaSPlan;
   currentPlanId: SaaSPlanId;
   currentSubscription: RestaurantSubscriptionStatus | null;
+  hasBillingEntitlement: boolean;
   billingPayments: BillingPayment[];
   billingCustomer: BillingCustomerStatus;
   refreshBilling: () => Promise<void>;
@@ -43,6 +45,7 @@ interface AppContextType {
   products: Product[];
   productCategories: CategoryOption[];
   orders: Order[];
+  refreshPublicOrderStatuses: (publicCodes: string[]) => Promise<void>;
   cart: CartItem[];
   tableNumber: string;
   setTableNumber: (num: string) => void;
@@ -187,22 +190,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAuthError(null);
     try {
       const session = await AuthService.login(email, password);
-      let activeMemberships = await AuthService.getActiveMemberships();
-      if (activeMemberships.length === 0) {
-        const onboarding = await AuthService.completePendingOnboarding(session);
-        if (onboarding) {
-          activeMemberships = [{
-            id: 'onboarding-' + onboarding.restaurantId,
-            restaurantId: onboarding.restaurantId,
-            profileId: session.user.id,
-            role: onboarding.memberRole,
-            active: true
-          }];
-          setCurrentPlanIdState(onboarding.planId);
-          localStorage.setItem('flux_current_plan_id', onboarding.planId);
-          addToast('Restaurante criado com sucesso. Bem-vindo ao FluxMenu!', 'success');
-        }
-      }
+      const activeMemberships = await AuthService.getActiveMemberships();
       if (activeMemberships.length === 0) {
         setAuthSession(session);
         setMemberships([]);
@@ -259,7 +247,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCurrentPlanIdState(result.onboarding.planId);
       localStorage.setItem('flux_active_restaurant_id', result.onboarding.restaurantId);
       localStorage.setItem('flux_current_plan_id', result.onboarding.planId);
-      addToast('Restaurante criado com sucesso. Bem-vindo ao FluxMenu!', 'success');
+      addToast('Restaurante criado. Agora escolha uma assinatura para liberar o painel.', 'success');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Falha ao criar conta.';
       setAuthError(message);
@@ -270,7 +258,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
 
-  const createRestaurantForCurrentUser = async (setup: RestaurantOnboardingSetup) => {
+  const createRestaurantForCurrentUser = async (setup: RestaurantOnboardingSetup): Promise<OnboardingResult> => {
     if (!authSession) throw new Error('Sessão autenticada obrigatória.');
     setAuthLoading(true);
     setAuthError(null);
@@ -292,7 +280,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCurrentPlanIdState(onboarding.planId);
       localStorage.setItem('flux_active_restaurant_id', onboarding.restaurantId);
       localStorage.setItem('flux_current_plan_id', onboarding.planId);
-      addToast('Restaurante criado com sucesso. Bem-vindo ao FluxMenu!', 'success');
+      addToast('Restaurante criado. Agora escolha uma assinatura para liberar o painel.', 'success');
+      return onboarding;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Falha ao criar restaurante.';
       setAuthError(message);
@@ -553,8 +542,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     hydrateSupabaseReads().catch(error => {
-      if (import.meta.env.DEV) console.warn('[FluxMenu data] Supabase bootstrap failed. Keeping local fallback data.', error);
-      if (!cancelled && authSession) setAuthLoading(false);
+      if (import.meta.env.DEV) console.warn('[FluxMenu data] Supabase bootstrap failed.', error);
+      if (!cancelled) {
+        setAuthError(error instanceof Error ? error.message : 'Não foi possível carregar dados do Supabase.');
+        if (authSession) setAuthLoading(false);
+      }
     });
 
     return () => {
@@ -782,8 +774,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const getCartTotal = () => OrderService.getCartTotal(cart);
 
+
+  const refreshPublicOrderStatuses = async (publicCodes: string[]) => {
+    if (!supabaseConfigured || publicCodes.length === 0) return;
+    try {
+      const statuses = await OrderService.getPublicOrderStatuses(activeRestaurantId, publicCodes);
+      setAllOrders(prev => prev.map(order => {
+        const status = statuses.find(current => current.id === order.id && current.restaurantId === order.restaurantId);
+        return status ? { ...order, status: status.status, updatedAt: status.updatedAt } : order;
+      }));
+    } catch (error) {
+      if (import.meta.env.DEV) console.warn('[FluxMenu data] Public order status refresh failed.', error);
+    }
+  };
+
   const confirmOrder = async (onSuccess?: () => void) => {
     if (cart.length === 0) return;
+    if (!tableNumber.trim()) {
+      addToast('Mesa obrigatória para enviar pedido. Acesse pelo QR Code correto.', 'warning');
+      throw new Error('Mesa obrigatória para enviar pedido.');
+    }
 
     try {
       const newOrder = supabaseConfigured
@@ -833,6 +843,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast('Operação de produção (KDS) não autorizada para seu nível de acesso!', 'warning');
       return;
     }
+
+    if (supabaseConfigured) {
+      OrderService.cancelOrderFromKds(orderId, activeRestaurantId)
+        .then(() => {
+          setAllOrders(prev => OrderService.archiveOrder(prev, orderId, activeRestaurantId));
+          addToast('Pedido ' + orderId + ' removido da produção.', 'warning');
+        })
+        .catch(error => {
+          console.error(error);
+          addToast('Não foi possível remover o pedido no Supabase.', 'warning');
+        });
+      return;
+    }
+
     setAllOrders(prev => OrderService.archiveOrder(prev, orderId, activeRestaurantId));
     addToast('Pedido ' + orderId + ' arquivado do painel', 'warning');
   };
@@ -842,8 +866,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast('Operação não autorizada para seu nível de acesso!', 'warning');
       return;
     }
+    if (supabaseConfigured) {
+      addToast('Em produção, remova pedidos individualmente para manter rastreabilidade.', 'warning');
+      return;
+    }
     setAllOrders(prev => prev.filter(order => order.restaurantId !== activeRestaurantId));
-    addToast('Todos os pedidos foram limpos de forma permanente', 'warning');
+    addToast('Todos os pedidos foram limpos localmente.', 'warning');
   };
 
 
@@ -1028,8 +1056,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast('Seu perfil de acesso não permite limpar logs fiscais!', 'warning');
       return;
     }
+    if (supabaseConfigured) {
+      addToast('Histórico financeiro de produção não é apagado pela interface.', 'warning');
+      return;
+    }
     setAllPaymentLogs(prev => prev.filter(log => log.restaurantId !== activeRestaurantId));
-    addToast('Histórico de caixa foi limpo com sucesso', 'info');
+    addToast('Histórico de caixa foi limpo localmente.', 'info');
   };
 
   return (
@@ -1047,6 +1079,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       currentPlan,
       currentPlanId,
       currentSubscription,
+      hasBillingEntitlement,
       billingPayments,
       billingCustomer,
       refreshBilling,
@@ -1063,6 +1096,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       products,
       productCategories,
       orders,
+      refreshPublicOrderStatuses,
       cart,
       tableNumber,
       setTableNumber,

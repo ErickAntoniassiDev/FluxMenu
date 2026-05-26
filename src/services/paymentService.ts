@@ -29,6 +29,7 @@ export async function loadPaymentLogsWithFallback(restaurantId: RestaurantId, fa
     return { paymentLogs, source: 'supabase' };
   } catch (error) {
     logSupabaseFallback('payment_logs', error);
+    if (import.meta.env.PROD) throw error;
   }
 
   const paymentLogs = getPaymentLogsForRestaurant(fallbackLogs, restaurantId);
