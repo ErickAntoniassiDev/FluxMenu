@@ -218,7 +218,7 @@ create index if not exists idx_plans_active on public.plans(active);
 create index if not exists idx_subscriptions_restaurant on public.subscriptions(restaurant_id);
 create index if not exists idx_subscriptions_plan on public.subscriptions(plan_id);
 create index if not exists idx_subscriptions_status on public.subscriptions(status);
-create unique index if not exists idx_subscriptions_one_active_per_restaurant
+create unique index if not exists idx_subscriptions_one_current_per_restaurant
   on public.subscriptions(restaurant_id)
   where status in ('trialing', 'active', 'past_due');
 

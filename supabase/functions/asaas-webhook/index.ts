@@ -29,6 +29,93 @@ type AsaasWebhook = {
   };
 };
 
+type SupabaseErrorLike = { message?: string; code?: string; details?: string; hint?: string };
+
+class WebhookSupabaseError extends Error {
+  context: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+
+  constructor(context: string, error: SupabaseErrorLike) {
+    super(error.message || 'Supabase webhook write failed.');
+    this.name = 'WebhookSupabaseError';
+    this.context = context;
+    this.code = error.code;
+    this.details = error.details;
+    this.hint = error.hint;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function sanitizeForLog(value: unknown): unknown {
+  if (typeof value === 'string') {
+    return value
+      .replace(/^Bearer\s+.+$/i, 'Bearer [redacted]')
+      .replace(/access_token[=:][^&\s]+/gi, 'access_token=[redacted]')
+      .replace(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/g, '[cpf redacted]')
+      .replace(/\b\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}\b/g, '[cnpj redacted]');
+  }
+  if (Array.isArray(value)) return value.map(sanitizeForLog);
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => {
+    if (/api.?key|secret|token|authorization|cpf|cnpj|document/i.test(key)) {
+      if (typeof entry === 'boolean' || typeof entry === 'number' || entry === null) return [key, entry];
+      return [key, '[redacted]'];
+    }
+    return [key, sanitizeForLog(entry)];
+  }));
+}
+
+function throwSupabaseError(context: string, error: unknown): never {
+  if (isRecord(error)) {
+    throw new WebhookSupabaseError(context, {
+      message: typeof error.message === 'string' ? error.message : undefined,
+      code: typeof error.code === 'string' ? error.code : undefined,
+      details: typeof error.details === 'string' ? error.details : undefined,
+      hint: typeof error.hint === 'string' ? error.hint : undefined
+    });
+  }
+  throw new WebhookSupabaseError(context, { message: 'Supabase webhook write failed.' });
+}
+
+function logWebhookError(error: unknown, payload: Partial<AsaasWebhook> | null): void {
+  const base = {
+    eventId: payload?.id ?? null,
+    event: payload?.event ?? null,
+    providerSubscriptionId: payload?.subscription?.id ?? payload?.payment?.subscription ?? null,
+    providerPaymentId: payload?.payment?.id ?? null,
+    restaurantId: restaurantIdFromReference(payload?.subscription?.externalReference ?? payload?.payment?.externalReference)
+  };
+
+  if (error instanceof WebhookSupabaseError) {
+    console.error('[asaas-webhook] request failed', sanitizeForLog({
+      ...base,
+      category: 'supabase',
+      context: error.context,
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint
+    }));
+    return;
+  }
+
+  console.error('[asaas-webhook] request failed', sanitizeForLog({
+    ...base,
+    category: error instanceof Error && /autorizad|unauthor/i.test(error.message) ? 'validation' : 'unexpected',
+    message: error instanceof Error ? error.message : 'unknown error',
+    rawType: typeof error
+  }));
+}
+
+function logWebhookInfo(message: string, details: Record<string, unknown>): void {
+  console.info('[asaas-webhook] ' + message, sanitizeForLog(details));
+}
+
 function isAllowedIp(req: Request): boolean {
   const allowed = (Deno.env.get('ASAAS_WEBHOOK_ALLOWED_IPS') ?? '').split(',').map(ip => ip.trim()).filter(Boolean);
   if (allowed.length === 0) return true;
@@ -61,7 +148,7 @@ async function findSubscription(payload: AsaasWebhook) {
   else return null;
 
   const { data, error } = await query.maybeSingle();
-  if (error) throw error;
+  if (error) throwSupabaseError('find subscription', error);
   return data as { id: string; restaurant_id: string; plan_id: string; provider_subscription_id?: string | null; provider_customer_id?: string | null } | null;
 }
 
@@ -71,7 +158,7 @@ async function processSubscriptionEvent(payload: AsaasWebhook, localSubscription
     ? 'canceled'
     : toSubscriptionStatus(payload.subscription.status);
 
-  await adminClient()
+  const updateResult = await adminClient()
     .from('subscriptions')
     .update({
       status,
@@ -82,6 +169,7 @@ async function processSubscriptionEvent(payload: AsaasWebhook, localSubscription
       canceled_at: status === 'canceled' ? new Date().toISOString() : null
     })
     .eq('id', localSubscription.id);
+  if (updateResult.error) throwSupabaseError('update subscription from subscription event', updateResult.error);
 }
 
 async function processPaymentEvent(payload: AsaasWebhook, localSubscription: Awaited<ReturnType<typeof findSubscription>>) {
@@ -92,7 +180,7 @@ async function processPaymentEvent(payload: AsaasWebhook, localSubscription: Awa
     : event === 'PAYMENT_RECEIVED' || event === 'PAYMENT_CONFIRMED' ? 'active'
     : null;
 
-  await adminClient()
+  const paymentUpsert = await adminClient()
     .from('billing_payments')
     .upsert({
       restaurant_id: localSubscription.restaurant_id,
@@ -110,28 +198,60 @@ async function processPaymentEvent(payload: AsaasWebhook, localSubscription: Awa
       invoice_url: payload.payment.invoiceUrl ?? payload.payment.bankSlipUrl ?? null,
       raw_event: payload
     }, { onConflict: 'provider,provider_payment_id' });
+  if (paymentUpsert.error) throwSupabaseError('upsert billing payment from payment event', paymentUpsert.error);
 
-  if (subscriptionStatus) {
-    await adminClient()
+  const subscriptionUpdate = subscriptionStatus
+    ? await adminClient()
       .from('subscriptions')
       .update({ status: subscriptionStatus, billing_status: subscriptionStatus, last_payment_status: paymentStatus })
-      .eq('id', localSubscription.id);
-  } else {
-    await adminClient().from('subscriptions').update({ last_payment_status: paymentStatus }).eq('id', localSubscription.id);
-  }
+      .eq('id', localSubscription.id)
+    : await adminClient().from('subscriptions').update({ last_payment_status: paymentStatus }).eq('id', localSubscription.id);
+  if (subscriptionUpdate.error) throwSupabaseError('update subscription from payment event', subscriptionUpdate.error);
 }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
 
+  let payload: Partial<AsaasWebhook> | null = null;
+
   try {
     validateWebhook(req);
-    const payload = await req.json() as AsaasWebhook;
+    payload = await req.json() as AsaasWebhook;
     if (!payload.id || !payload.event) throw new Error('Evento inválido.');
 
-    const localSubscription = await findSubscription(payload);
+    logWebhookInfo('payload received', {
+      eventId: payload.id,
+      event: payload.event,
+      providerSubscriptionId: payload.subscription?.id ?? payload.payment?.subscription ?? null,
+      providerPaymentId: payload.payment?.id ?? null,
+      restaurantId: restaurantIdFromReference(payload.subscription?.externalReference ?? payload.payment?.externalReference)
+    });
+
+    const duplicateCheck = await adminClient()
+      .from('billing_events')
+      .select('id')
+      .eq('provider', 'asaas')
+      .eq('provider_event_id', payload.id)
+      .maybeSingle();
+    if (duplicateCheck.error) throwSupabaseError('check duplicate billing event', duplicateCheck.error);
+    if (duplicateCheck.data) return jsonResponse({ received: true, duplicate: true });
+
+    const localSubscription = await findSubscription(payload as AsaasWebhook);
     const restaurantId = localSubscription?.restaurant_id ?? restaurantIdFromReference(payload.subscription?.externalReference ?? payload.payment?.externalReference);
+
+    if (!localSubscription) {
+      logWebhookInfo('event without local subscription', {
+        eventId: payload.id,
+        event: payload.event,
+        providerSubscriptionId: payload.subscription?.id ?? payload.payment?.subscription ?? null,
+        providerPaymentId: payload.payment?.id ?? null,
+        restaurantId
+      });
+    }
+
+    if (payload.event.startsWith('SUBSCRIPTION_')) await processSubscriptionEvent(payload as AsaasWebhook, localSubscription);
+    if (payload.event.startsWith('PAYMENT_')) await processPaymentEvent(payload as AsaasWebhook, localSubscription);
 
     const eventInsert = await adminClient().from('billing_events').insert({
       provider: 'asaas',
@@ -144,14 +264,11 @@ Deno.serve(async (req) => {
     });
 
     if (eventInsert.error?.code === '23505') return jsonResponse({ received: true, duplicate: true });
-    if (eventInsert.error) throw eventInsert.error;
-
-    if (payload.event.startsWith('SUBSCRIPTION_')) await processSubscriptionEvent(payload, localSubscription);
-    if (payload.event.startsWith('PAYMENT_')) await processPaymentEvent(payload, localSubscription);
+    if (eventInsert.error) throwSupabaseError('insert billing event', eventInsert.error);
 
     return jsonResponse({ received: true });
   } catch (error) {
-    console.error('[asaas-webhook]', error instanceof Error ? error.message : 'unknown error');
+    logWebhookError(error, payload);
     return jsonResponse({ error: 'Webhook rejected' }, 401);
   }
 });

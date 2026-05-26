@@ -51,6 +51,7 @@ export const Header: React.FC = () => {
     hasPermission,
     isModeAllowed,
     isAuthenticated,
+    canUseFeature,
   } = useApp();
 
   const navigate = useNavigate();
@@ -60,10 +61,10 @@ export const Header: React.FC = () => {
     navigate(modeRoutes[mode]);
   };
 
-  const staffUsers = getStaffUsers(activeRestaurantId);
   const userLimit = getPlanLimit('maxStaffUsers');
+  const staffUsers = isAuthenticated ? [currentUser] : getStaffUsers(activeRestaurantId);
   const visibleStaffUsers = isAuthenticated ? [currentUser] : (userLimit < 0 ? staffUsers : staffUsers.slice(0, userLimit));
-  const canRemoveBranding = currentPlan.features.remove_fluxmenu_branding;
+  const canRemoveBranding = canUseFeature('remove_fluxmenu_branding');
 
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);

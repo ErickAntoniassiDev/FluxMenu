@@ -32,6 +32,28 @@ create table if not exists public.billing_customer_data (
 
 create index if not exists idx_billing_customer_data_provider_customer on public.billing_customer_data(provider, provider_customer_id);
 
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'billing_customer_data_provider_check'
+      and conrelid = 'public.billing_customer_data'::regclass
+  ) then
+    alter table public.billing_customer_data
+      add constraint billing_customer_data_provider_check check (provider in ('asaas'));
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'billing_customer_data_cpf_cnpj_digits_check'
+      and conrelid = 'public.billing_customer_data'::regclass
+  ) then
+    alter table public.billing_customer_data
+      add constraint billing_customer_data_cpf_cnpj_digits_check check (cpf_cnpj is null or cpf_cnpj ~ '^[0-9]{11}$|^[0-9]{14}$');
+  end if;
+end;
+$$;
+
 create table if not exists public.billing_payments (
   id uuid primary key default gen_random_uuid(),
   restaurant_id uuid not null references public.restaurants(id) on delete cascade,
@@ -69,8 +91,41 @@ create table if not exists public.billing_events (
 create index if not exists idx_billing_payments_restaurant_created on public.billing_payments(restaurant_id, created_at desc);
 create index if not exists idx_billing_payments_subscription on public.billing_payments(subscription_id);
 create index if not exists idx_billing_events_restaurant_processed on public.billing_events(restaurant_id, processed_at desc);
-create unique index if not exists idx_subscriptions_restaurant_unique on public.subscriptions(restaurant_id);
+
+-- Keep canceled subscriptions as history, but never allow more than one current
+-- trialing/active/past_due subscription per restaurant.
+drop index if exists public.idx_subscriptions_restaurant_unique;
+drop index if exists public.idx_subscriptions_one_active_per_restaurant;
+
+with ranked as (
+  select
+    id,
+    row_number() over (
+      partition by restaurant_id
+      order by updated_at desc nulls last, created_at desc nulls last, id desc
+    ) as rn
+  from public.subscriptions
+  where status in ('trialing', 'active', 'past_due')
+)
+update public.subscriptions s
+set
+  status = 'canceled',
+  billing_status = 'canceled',
+  canceled_at = coalesce(s.canceled_at, now()),
+  updated_at = now()
+from ranked r
+where s.id = r.id
+  and r.rn > 1;
+
+create unique index if not exists idx_subscriptions_one_current_per_restaurant
+  on public.subscriptions(restaurant_id)
+  where status in ('trialing', 'active', 'past_due');
+
 create index if not exists idx_subscriptions_provider_subscription on public.subscriptions(provider, provider_subscription_id);
+
+create unique index if not exists idx_subscriptions_asaas_provider_subscription_unique
+  on public.subscriptions(provider, provider_subscription_id)
+  where provider = 'asaas' and provider_subscription_id is not null;
 
 
 alter table public.billing_customer_data enable row level security;

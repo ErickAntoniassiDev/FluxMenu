@@ -62,6 +62,7 @@ export const AdminPanel: React.FC = () => {
     refreshBilling,
     currentUser,
     canUseFeature,
+    checkLimit,
     showUpgradeNotice,
     products,
     productCategories,
@@ -133,6 +134,9 @@ export const AdminPanel: React.FC = () => {
   const canManageRestaurant = hasPermission('canConfigureRestaurant');
   const canManageTables = hasPermission('canManageTables');
   const canManageStaff = currentUser.role === 'owner' || currentUser.role === 'manager';
+  const activeStaffCount = staffMembers.filter(member => member.active).length;
+  const staffLimitDecision = checkLimit('maxStaffUsers', activeStaffCount, 1);
+  const canInviteStaff = canManageStaff && canUseFeature('multi_user_rbac') && staffLimitDecision.allowed;
   const assignableRoles = StaffService.getAssignableRoles(currentUser.role);
   const weekDays = [
     ['mon', 'Segunda'],
@@ -180,7 +184,7 @@ export const AdminPanel: React.FC = () => {
   }, [activeRestaurantId]);
 
   useEffect(() => {
-    if (currentUser.role === 'owner') void refreshBilling().catch(error => setBillingError(error instanceof Error ? error.message : 'Não foi possível carregar assinatura.'));
+    if (currentUser.role === 'owner' || currentUser.role === 'manager') void refreshBilling().catch(error => setBillingError(error instanceof Error ? error.message : 'Não foi possível carregar assinatura.'));
   }, [activeRestaurantId, currentUser.role]);
 
   useEffect(() => {
@@ -359,8 +363,10 @@ export const AdminPanel: React.FC = () => {
   const handleInviteStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteEmail.trim()) return setStaffError('Informe o email do funcionário.');
-    setStaffLoading(true);
     setStaffError(null);
+    if (!canUseFeature('multi_user_rbac')) return setStaffError('Gestão de equipe está disponível a partir do plano Pro.');
+    if (!staffLimitDecision.allowed) return setStaffError(staffLimitDecision.message ?? 'Limite de usuários atingido para o plano atual.');
+    setStaffLoading(true);
     try {
       await StaffService.inviteStaff(activeRestaurantId, inviteEmail, inviteRole, currentUser.role);
       setInviteEmail('');
@@ -403,6 +409,13 @@ export const AdminPanel: React.FC = () => {
 
   const handleSaveSettings = async () => {
     setSettingsError(null);
+    const advancedCustomizationChanged = settingsDraft.bannerUrl !== restaurantConfig.bannerUrl
+      || settingsDraft.secondaryColor !== restaurantConfig.secondaryColor
+      || JSON.stringify(settingsDraft.openingHours ?? {}) !== JSON.stringify(restaurantConfig.openingHours ?? {});
+    if (advancedCustomizationChanged && !canUseAdvancedCustomization) {
+      setSettingsError('Banner, cor secundária e horários personalizados estão disponíveis no plano Premium.');
+      return;
+    }
     setSettingsLoading('settings');
     try {
       await setRestaurantConfig(settingsDraft);
@@ -416,6 +429,10 @@ export const AdminPanel: React.FC = () => {
   const handleAssetUpload = async (kind: 'logo' | 'banner', file: File | null) => {
     if (!file) return;
     setSettingsError(null);
+    if (kind === 'banner' && !canUseAdvancedCustomization) {
+      setSettingsError('Banner personalizado está disponível no plano Premium.');
+      return;
+    }
     setSettingsLoading(kind);
     try {
       const url = await AssetService.uploadRestaurantAsset(activeRestaurantId, kind, file);
@@ -1039,14 +1056,16 @@ export const AdminPanel: React.FC = () => {
               </div>
 
               {!canManageStaff && <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">Seu perfil não pode gerenciar funcionários.</div>}
+              {!canUseFeature('multi_user_rbac') && canManageStaff && <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">Gestão de equipe está disponível a partir do plano Pro.</div>}
+              {canUseFeature('multi_user_rbac') && canManageStaff && !staffLimitDecision.allowed && <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">{staffLimitDecision.message}</div>}
               {staffError && <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold">{staffError}</div>}
 
               <form onSubmit={handleInviteStaff} className="grid grid-cols-1 md:grid-cols-[1fr_180px_auto] gap-2">
-                <input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} type="email" placeholder="email@restaurante.com" disabled={!canManageStaff || staffLoading} className="p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 font-semibold bg-slate-50 disabled:opacity-60" />
-                <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as UserRole)} disabled={!canManageStaff || staffLoading} className="p-2.5 border border-slate-200 rounded-lg text-xs font-bold bg-white disabled:opacity-60">
+                <input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} type="email" placeholder="email@restaurante.com" disabled={!canInviteStaff || staffLoading} className="p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 font-semibold bg-slate-50 disabled:opacity-60" />
+                <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as UserRole)} disabled={!canInviteStaff || staffLoading} className="p-2.5 border border-slate-200 rounded-lg text-xs font-bold bg-white disabled:opacity-60">
                   {assignableRoles.map(role => <option key={role} value={role}>{role}</option>)}
                 </select>
-                <button type="submit" disabled={!canManageStaff || staffLoading || assignableRoles.length === 0} className="h-10 px-4 rounded-lg bg-slate-950 text-white text-xs font-black uppercase flex items-center justify-center gap-2 disabled:opacity-60">
+                <button type="submit" disabled={!canInviteStaff || staffLoading || assignableRoles.length === 0} className="h-10 px-4 rounded-lg bg-slate-950 text-white text-xs font-black uppercase flex items-center justify-center gap-2 disabled:opacity-60">
                   <UserPlus className="w-3.5 h-3.5" /> Convidar
                 </button>
               </form>
@@ -1206,18 +1225,18 @@ export const AdminPanel: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2 border border-slate-200 rounded-xl p-4"><div className="flex items-center gap-2 text-xs font-black uppercase text-slate-900"><ImageIcon className="w-4 h-4" />Logo</div>{settingsDraft.logoUrl && <img src={settingsDraft.logoUrl} alt="Logo" className="w-20 h-20 object-cover rounded-xl border border-slate-200" />}<input type="file" accept="image/*" disabled={!canManageRestaurant || settingsLoading === 'logo'} onChange={(e) => void handleAssetUpload('logo', e.target.files?.[0] ?? null)} className="text-xs" /></div>
-              <div className="space-y-2 border border-slate-200 rounded-xl p-4"><div className="flex items-center gap-2 text-xs font-black uppercase text-slate-900"><ImageIcon className="w-4 h-4" />Banner</div>{settingsDraft.bannerUrl && <img src={settingsDraft.bannerUrl} alt="Banner" className="w-full h-24 object-cover rounded-xl border border-slate-200" />}<input type="file" accept="image/*" disabled={!canManageRestaurant || settingsLoading === 'banner'} onChange={(e) => void handleAssetUpload('banner', e.target.files?.[0] ?? null)} className="text-xs" /></div>
+              <div className="space-y-2 border border-slate-200 rounded-xl p-4"><div className="flex items-center gap-2 text-xs font-black uppercase text-slate-900"><ImageIcon className="w-4 h-4" />Banner</div>{settingsDraft.bannerUrl && <img src={settingsDraft.bannerUrl} alt="Banner" className="w-full h-24 object-cover rounded-xl border border-slate-200" />}<input type="file" accept="image/*" disabled={!canManageRestaurant || !canUseAdvancedCustomization || settingsLoading === 'banner'} onChange={(e) => void handleAssetUpload('banner', e.target.files?.[0] ?? null)} className="text-xs" /></div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5"><label className="text-xs font-bold text-slate-500 flex items-center gap-1"><Palette className="w-3.5 h-3.5" />Cor primária</label><input type="color" value={settingsDraft.primaryColor ?? '#dc2626'} onChange={(e) => setSettingsDraft({ ...settingsDraft, primaryColor: e.target.value })} disabled={!canManageRestaurant} className="w-full h-10 border border-slate-200 rounded-lg" /></div>
-              <div className="space-y-1.5"><label className="text-xs font-bold text-slate-500 flex items-center gap-1"><Palette className="w-3.5 h-3.5" />Cor secundária</label><input type="color" value={settingsDraft.secondaryColor ?? '#0f172a'} onChange={(e) => setSettingsDraft({ ...settingsDraft, secondaryColor: e.target.value })} disabled={!canManageRestaurant} className="w-full h-10 border border-slate-200 rounded-lg" /></div>
+              <div className="space-y-1.5"><label className="text-xs font-bold text-slate-500 flex items-center gap-1"><Palette className="w-3.5 h-3.5" />Cor secundária</label><input type="color" value={settingsDraft.secondaryColor ?? '#0f172a'} onChange={(e) => setSettingsDraft({ ...settingsDraft, secondaryColor: e.target.value })} disabled={!canManageRestaurant || !canUseAdvancedCustomization} className="w-full h-10 border border-slate-200 rounded-lg disabled:opacity-60" /></div>
             </div>
 
             <div className="space-y-3">
               <h5 className="text-xs font-black uppercase text-slate-900 tracking-wider flex items-center gap-2"><Clock className="w-4 h-4" />Horários</h5>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-                {weekDays.map(([key, label]) => <div key={key} className="space-y-1"><label className="text-[10px] font-bold uppercase text-slate-400">{label}</label><input value={settingsDraft.openingHours?.[key] ?? ''} onChange={(e) => updateOpeningHour(key, e.target.value)} placeholder="11:00-23:00 ou fechado" disabled={!canManageRestaurant} className="w-full p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 disabled:opacity-60" /></div>)}
+                {weekDays.map(([key, label]) => <div key={key} className="space-y-1"><label className="text-[10px] font-bold uppercase text-slate-400">{label}</label><input value={settingsDraft.openingHours?.[key] ?? ''} onChange={(e) => updateOpeningHour(key, e.target.value)} placeholder="11:00-23:00 ou fechado" disabled={!canManageRestaurant || !canUseAdvancedCustomization} className="w-full p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 disabled:opacity-60" /></div>)}
               </div>
             </div>
           </div>

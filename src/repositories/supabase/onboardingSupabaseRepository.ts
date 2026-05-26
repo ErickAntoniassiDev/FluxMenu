@@ -1,5 +1,5 @@
 import { callSupabaseRpc } from '../../lib/supabase/client';
-import { RestaurantId, SaaSPlanId, UserRole } from '../../types';
+import { RestaurantId, RestaurantOnboardingSetup, SaaSPlanId, UserRole } from '../../types';
 
 export type OnboardingResult = {
   restaurantId: RestaurantId;
@@ -17,10 +17,15 @@ type SupabaseOnboardingResult = {
   member_role: UserRole;
 };
 
-export async function createRestaurantOnboarding(restaurantName: string, planId: SaaSPlanId = 'starter'): Promise<OnboardingResult> {
+export async function createRestaurantOnboarding(restaurantName: string, planId: SaaSPlanId = 'starter', setup?: RestaurantOnboardingSetup): Promise<OnboardingResult> {
   const result = await callSupabaseRpc<SupabaseOnboardingResult>('create_restaurant_onboarding', {
     p_restaurant_name: restaurantName,
-    p_plan_id: planId
+    p_plan_id: planId,
+    p_setup: setup ? {
+      tables: setup.tables,
+      categories: setup.categories,
+      products: setup.products
+    } : null
   });
 
   return {

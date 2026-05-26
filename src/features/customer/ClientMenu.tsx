@@ -64,7 +64,8 @@ export const ClientMenu: React.FC = () => {
           <div className="relative flex-1 md:w-64 shrink-0">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
-              type="text"
+              type="search"
+              aria-label="Pesquisar no cardapio"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Pesquisar pratos, bebidas..."
@@ -76,6 +77,7 @@ export const ClientMenu: React.FC = () => {
           <a
             href="#/portal"
             className="px-3 py-2 rounded-xl text-[10px] uppercase font-black tracking-wider text-red-650 border border-red-100 bg-red-50/30 hover:bg-red-50 hover:text-red-750 transition flex items-center gap-1.5 cursor-pointer select-none"
+            aria-label="Acessar portal administrativo"
             title="Clique para acessar o Portal Administrativo com perfis operacionais, KDS de Cozinha e Caixa"
           >
             <span>🔐 Portal</span>
@@ -89,6 +91,8 @@ export const ClientMenu: React.FC = () => {
           <button
             key={cat.id}
             onClick={() => setSelectedCategory(cat.id)}
+            type="button"
+            aria-pressed={selectedCategory === cat.id}
             className={`px-3.5 py-1.5 rounded-full text-xs font-black whitespace-nowrap transition cursor-pointer select-none border ${
               selectedCategory === cat.id
                 ? 'bg-red-600 text-white border-red-700 shadow-sm'
@@ -131,6 +135,8 @@ export const ClientMenu: React.FC = () => {
                       src={product.image}
                       alt={product.name}
                       referrerPolicy="no-referrer"
+                      loading="lazy"
+                      decoding="async"
                       className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-103"
                     />
                     
@@ -171,7 +177,7 @@ export const ClientMenu: React.FC = () => {
                       </span>
                       
                       {isAvailable ? (
-                        <button className="px-2.5 py-1.5 rounded-lg bg-red-50 text-red-650 font-black text-[10px] group-hover:bg-red-600 group-hover:text-white transition cursor-pointer select-none border border-red-100">
+                        <button type="button" aria-label={`Adicionar ${product.name}`} className="px-2.5 py-1.5 rounded-lg bg-red-50 text-red-650 font-black text-[10px] group-hover:bg-red-600 group-hover:text-white transition cursor-pointer select-none border border-red-100">
                           + Adicionar
                         </button>
                       ) : (
@@ -198,6 +204,8 @@ export const ClientMenu: React.FC = () => {
           >
             <button
               onClick={() => setIsCartOpen(true)}
+              type="button"
+              aria-label="Abrir carrinho"
               className="w-full bg-red-650 hover:bg-red-700 text-white rounded-xl py-3.5 px-4 flex items-center justify-between shadow-lg hover:shadow-xl transition active:scale-98 cursor-pointer border border-red-750"
             >
               <div className="flex items-center gap-2.5">

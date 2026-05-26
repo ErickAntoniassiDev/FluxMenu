@@ -21,19 +21,14 @@ export const CartSidebar: React.FC<CartSidebarProps> = ({ isOpen, onClose }) => 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const handleConfirmOrder = async () => {
-    if (cart.length === 0) return;
+    if (cart.length === 0 || isSubmitting) return;
     setIsSubmitting(true);
-    
-    // Brief processing delay for order confirmation feedback
-    setTimeout(async () => {
-      try {
-        await confirmOrder();
-        setIsSubmitting(false);
-        onClose();
-      } catch (err) {
-        setIsSubmitting(false);
-      }
-    }, 1200);
+    try {
+      await confirmOrder();
+      onClose();
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const total = getCartTotal();
@@ -41,7 +36,7 @@ export const CartSidebar: React.FC<CartSidebarProps> = ({ isOpen, onClose }) => 
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 overflow-hidden" id="cart-sidebar-wrapper">
+        <div className="fixed inset-0 z-50 overflow-hidden" id="cart-sidebar-wrapper" role="dialog" aria-modal="true" aria-labelledby="cart-sidebar-title">
           {/* Backdrop overlay */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -66,7 +61,7 @@ export const CartSidebar: React.FC<CartSidebarProps> = ({ isOpen, onClose }) => 
                     <Table className="w-4 h-4" />
                   </span>
                   <div>
-                    <h3 className="text-sm font-extrabold text-slate-950 uppercase tracking-tight">meu carrinho</h3>
+                    <h3 id="cart-sidebar-title" className="text-sm font-extrabold text-slate-950 uppercase tracking-tight">meu carrinho</h3>
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Enviando para {tableNumber}</p>
                   </div>
                 </div>
@@ -74,7 +69,7 @@ export const CartSidebar: React.FC<CartSidebarProps> = ({ isOpen, onClose }) => 
                 <button
                   onClick={onClose}
                   className="w-8 h-8 rounded-lg hover:bg-slate-50 border border-slate-150 text-slate-400 hover:text-slate-700 flex items-center justify-center transition-colors cursor-pointer"
-                  id="close-cart-btn"
+                  id="close-cart-btn" aria-label="Fechar carrinho"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -132,7 +127,7 @@ export const CartSidebar: React.FC<CartSidebarProps> = ({ isOpen, onClose }) => 
                             <button
                               onClick={() => removeFromCart(index)}
                               className="text-slate-300 hover:text-red-600 p-1 rounded-sm hover:bg-slate-55 transition-colors cursor-pointer"
-                              title="Remover Item"
+                              title="Remover item" aria-label="Remover item do carrinho"
                               id={`remove-cart-${item.product.id}`}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -141,6 +136,7 @@ export const CartSidebar: React.FC<CartSidebarProps> = ({ isOpen, onClose }) => 
                             <div className="flex items-center gap-2 border border-slate-200 rounded-lg p-0.5 bg-slate-50 shrink-0">
                               <button
                                 onClick={() => updateCartQuantity(index, -1)}
+                                aria-label="Diminuir quantidade"
                                 className="w-5 h-5 rounded-md bg-white border border-slate-200 text-slate-705 font-mono text-[10px] font-black flex items-center justify-center hover:bg-slate-55 transition"
                               >
                                 -
@@ -150,6 +146,7 @@ export const CartSidebar: React.FC<CartSidebarProps> = ({ isOpen, onClose }) => 
                               </span>
                               <button
                                 onClick={() => updateCartQuantity(index, 1)}
+                                aria-label="Aumentar quantidade"
                                 className="w-5 h-5 rounded-md bg-white border border-slate-200 text-slate-705 font-mono text-[10px] font-black flex items-center justify-center hover:bg-slate-55 transition"
                               >
                                 +

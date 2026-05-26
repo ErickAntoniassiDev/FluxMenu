@@ -1,3 +1,5 @@
+-- DEVELOPMENT ONLY. Do not run this file in production.
+-- It creates fictitious restaurants, catalog items and tables for local demos.
 -- FluxMenu initial Supabase seed data
 -- Run after supabase/schema.sql.
 -- Uses fixed UUIDs to make local/dev tests predictable.
@@ -271,63 +273,8 @@ on conflict (restaurant_id, slug) do update set
   updated_at = now();
 
 -- -----------------------------------------------------------------------------
--- Test subscriptions
--- The schema allows one active/trialing/past_due subscription per restaurant.
--- Starter and Pro are active examples; Premium is kept as canceled history.
+-- Billing/subscriptions
 -- -----------------------------------------------------------------------------
-
-insert into public.subscriptions (
-  id,
-  restaurant_id,
-  plan_id,
-  status,
-  current_period_start,
-  current_period_end,
-  trial_ends_at,
-  provider,
-  provider_subscription_id
-)
-values
-  (
-    'aaaa0000-0000-4000-8000-000000000001',
-    '11111111-1111-4111-8111-111111111111',
-    'starter',
-    'active',
-    now(),
-    now() + interval '30 days',
-    null,
-    'seed',
-    'seed_starter_gusto'
-  ),
-  (
-    'aaaa0000-0000-4000-8000-000000000002',
-    '22222222-2222-4222-8222-222222222222',
-    'pro',
-    'active',
-    now(),
-    now() + interval '30 days',
-    null,
-    'seed',
-    'seed_pro_bistro'
-  ),
-  (
-    'aaaa0000-0000-4000-8000-000000000003',
-    '11111111-1111-4111-8111-111111111111',
-    'premium',
-    'canceled',
-    now() - interval '60 days',
-    now() - interval '30 days',
-    null,
-    'seed',
-    'seed_premium_history_gusto'
-  )
-on conflict (id) do update set
-  restaurant_id = excluded.restaurant_id,
-  plan_id = excluded.plan_id,
-  status = excluded.status,
-  current_period_start = excluded.current_period_start,
-  current_period_end = excluded.current_period_end,
-  trial_ends_at = excluded.trial_ends_at,
-  provider = excluded.provider,
-  provider_subscription_id = excluded.provider_subscription_id,
-  updated_at = now();
+-- Development seeds intentionally do not create subscriptions.
+-- SaaS billing should be created by the Asaas Edge Functions so provider ids,
+-- customer ids, status and payment history stay coherent.

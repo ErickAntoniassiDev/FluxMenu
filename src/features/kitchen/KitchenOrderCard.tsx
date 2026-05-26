@@ -6,10 +6,11 @@ import { motion } from 'motion/react';
 
 interface KitchenOrderCardProps {
   order: Order;
+  currentTime: number;
 }
 
-export const KitchenOrderCard: React.FC<KitchenOrderCardProps> = ({ order }) => {
-  const { updateOrderStatus, archiveOrder, tick } = useApp();
+export const KitchenOrderCard: React.FC<KitchenOrderCardProps> = ({ order, currentTime }) => {
+  const { updateOrderStatus, archiveOrder } = useApp();
 
   // Local checklist trackers so chefs can physically cross out dishes as they make them
   const [checkedItems, setCheckedItems] = useState<{ [key: number]: boolean }>({});
@@ -22,7 +23,7 @@ export const KitchenOrderCard: React.FC<KitchenOrderCardProps> = ({ order }) => 
   };
 
   // Calculate elapsed waiting times dynamically tied to Tick context state
-  const elapsedMs = Date.now() - new Date(order.createdAt).getTime();
+  const elapsedMs = currentTime - new Date(order.createdAt).getTime();
   const elapsedMinutes = Math.floor(elapsedMs / 1000 / 60);
   const elapsedSeconds = Math.floor((elapsedMs / 1000) % 65);
 

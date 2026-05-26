@@ -32,6 +32,31 @@ export interface SaaSPlan {
 }
 
 
+
+export interface OnboardingTableInput {
+  label: string;
+}
+
+export interface OnboardingCategoryInput {
+  name: string;
+}
+
+export interface OnboardingProductInput {
+  name: string;
+  description: string;
+  price: number;
+  categoryName: string;
+  prepTimeMinutes: number;
+}
+
+export interface RestaurantOnboardingSetup {
+  restaurantName: string;
+  planId: SaaSPlanId;
+  tables: OnboardingTableInput[];
+  categories: OnboardingCategoryInput[];
+  products: OnboardingProductInput[];
+}
+
 export interface CategoryOption {
   id: MenuCategoryFilter;
   label: string;

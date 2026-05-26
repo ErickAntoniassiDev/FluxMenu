@@ -1,15 +1,25 @@
-import React, { useEffect } from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 import { AppProvider, useApp } from './store/AppContext';
 import { Header } from './features/shared/Header';
-import { ClientMenu } from './features/customer/ClientMenu';
-import { KitchenPanel } from './features/kitchen/KitchenPanel';
-import { AdminPanel } from './features/admin/AdminPanel';
-import { CashierPanel } from './features/cashier/CashierPanel';
+
 import { ToastContainer } from './features/shared/ToastContainer';
-import { LoginScreen } from './features/shared/LoginScreen';
-import { OnboardingScreen } from './features/shared/OnboardingScreen';
+
 import { HashRouter, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ROLE_PERMISSIONS } from './utils/rbac';
+
+
+const ClientMenu = lazy(() => import('./features/customer/ClientMenu').then(module => ({ default: module.ClientMenu })));
+const KitchenPanel = lazy(() => import('./features/kitchen/KitchenPanel').then(module => ({ default: module.KitchenPanel })));
+const AdminPanel = lazy(() => import('./features/admin/AdminPanel').then(module => ({ default: module.AdminPanel })));
+const CashierPanel = lazy(() => import('./features/cashier/CashierPanel').then(module => ({ default: module.CashierPanel })));
+const LoginScreen = lazy(() => import('./features/shared/LoginScreen').then(module => ({ default: module.LoginScreen })));
+const OnboardingScreen = lazy(() => import('./features/shared/OnboardingScreen').then(module => ({ default: module.OnboardingScreen })));
+
+const ScreenLoading: React.FC<{ label?: string }> = ({ label = 'Carregando...' }) => (
+  <div className="h-full w-full flex items-center justify-center bg-slate-50 text-xs font-black text-slate-500 uppercase" role="status" aria-live="polite">
+    {label}
+  </div>
+);
 
 type AppMode = 'client' | 'kitchen' | 'cashier' | 'admin' | 'split';
 
@@ -74,7 +84,7 @@ const RouteSynchronizer: React.FC<{ children: React.ReactNode }> = ({ children }
     }
 
     if (restaurantSlug) {
-      const foundRestaurant = setActiveRestaurantBySlug(decodeURIComponent(restaurantSlug));
+      const foundRestaurant = setActiveRestaurantBySlug(decodeURIComponent(restaurantSlug), true);
       if (!foundRestaurant) {
         setPublicRouteError('Restaurante não encontrado ou indisponível.');
         return;
@@ -106,17 +116,25 @@ const RouteSynchronizer: React.FC<{ children: React.ReactNode }> = ({ children }
 
 const SmartRoot: React.FC = () => {
   const { authLoading, isAuthenticated, hasActiveRestaurant, currentUser } = useApp();
-  if (authLoading) return <div className="h-full w-full flex items-center justify-center text-xs font-black text-slate-500 uppercase">Carregando sessão...</div>;
+  if (authLoading) return <ScreenLoading label="Carregando sessão..." />
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (!hasActiveRestaurant) return <Navigate to="/onboarding" replace />;
   return <Navigate to={getDefaultRouteForRole(currentUser.role)} replace />;
 };
 
 const ProtectedView: React.FC<{ mode: AppMode; children: React.ReactNode }> = ({ mode, children }) => {
-  const { authLoading, isAuthenticated, hasActiveRestaurant, currentUser, isModeAllowed } = useApp();
-  if (authLoading) return <div className="h-full w-full flex items-center justify-center text-xs font-black text-slate-500 uppercase">Carregando sessão...</div>;
+  const { authLoading, isAuthenticated, hasActiveRestaurant, currentUser, activeRestaurantId, setActiveRestaurantId, isModeAllowed } = useApp();
+
+  useEffect(() => {
+    if (!authLoading && isAuthenticated && hasActiveRestaurant && currentUser.restaurantId !== activeRestaurantId) {
+      setActiveRestaurantId(currentUser.restaurantId);
+    }
+  }, [activeRestaurantId, authLoading, currentUser.restaurantId, hasActiveRestaurant, isAuthenticated, setActiveRestaurantId]);
+
+  if (authLoading) return <ScreenLoading label="Carregando sessão..." />
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (!hasActiveRestaurant) return <Navigate to="/onboarding" replace />;
+  if (currentUser.restaurantId !== activeRestaurantId) return <ScreenLoading label="Sincronizando restaurante..." />
   if (!isModeAllowed(mode)) return <Navigate to={getDefaultRouteForRole(currentUser.role)} replace />;
   return <>{children}</>;
 };
@@ -132,7 +150,7 @@ const OperationalShell: React.FC<{ mode: AppMode; children: React.ReactNode }> =
     <ProtectedView mode={mode}>
       <div className="h-screen w-screen flex flex-col overflow-hidden bg-slate-50 font-sans" id="main-app-viewport">
         <Header />
-        <main className="flex-1 overflow-hidden relative flex flex-col">{children}</main>
+        <main className="flex-1 overflow-hidden relative flex flex-col"><Suspense fallback={<ScreenLoading />}>{children}</Suspense></main>
         <ToastContainer />
       </div>
     </ProtectedView>
@@ -164,7 +182,7 @@ const AppContent: React.FC = () => {
     return (
       <RouteSynchronizer>
         <div className="h-screen w-screen flex flex-col overflow-hidden bg-slate-50 font-sans" id="public-menu-viewport">
-          <main className="flex-1 overflow-hidden relative flex flex-col"><ClientMenu /></main>
+          <main className="flex-1 overflow-hidden relative flex flex-col"><Suspense fallback={<ScreenLoading />}><ClientMenu /></Suspense></main>
           <ToastContainer />
         </div>
       </RouteSynchronizer>
@@ -172,16 +190,16 @@ const AppContent: React.FC = () => {
   }
 
   if (path === '/login') {
-    if (authLoading) return <div className="h-screen w-screen flex items-center justify-center text-xs font-black text-slate-500 uppercase">Carregando sessão...</div>;
+    if (authLoading) return <div className="h-screen w-screen"><ScreenLoading label="Carregando sessão..." /></div>;
     if (isAuthenticated && hasActiveRestaurant) return <Navigate to="/admin" replace />;
     if (isAuthenticated && !hasActiveRestaurant) return <Navigate to="/onboarding" replace />;
-    return <div className="h-screen w-screen bg-slate-50 font-sans"><LoginScreen /><ToastContainer /></div>;
+    return <div className="h-screen w-screen bg-slate-50 font-sans"><Suspense fallback={<ScreenLoading />}><LoginScreen /></Suspense><ToastContainer /></div>;
   }
 
   if (path === '/onboarding') {
     if (!authLoading && !isAuthenticated) return <Navigate to="/login" replace />;
     if (!authLoading && isAuthenticated && hasActiveRestaurant) return <Navigate to="/admin" replace />;
-    return <div className="h-screen w-screen bg-slate-50 font-sans"><OnboardingScreen /><ToastContainer /></div>;
+    return <div className="h-screen w-screen bg-slate-50 font-sans"><Suspense fallback={<ScreenLoading />}><OnboardingScreen /></Suspense><ToastContainer /></div>;
   }
 
   if (path === '/admin') {

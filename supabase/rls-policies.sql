@@ -89,8 +89,10 @@ grant select, insert, update on public.categories to authenticated;
 grant select, insert, update on public.products to authenticated;
 grant select, insert, update on public.restaurant_tables to authenticated;
 
-grant select, insert, update on public.orders to authenticated;
-grant select, insert, update on public.order_items to authenticated;
+grant select, insert on public.orders to authenticated;
+revoke update on public.orders from authenticated;
+grant select, insert on public.order_items to authenticated;
+revoke update on public.order_items from authenticated;
 
 grant execute on function public.is_active_member(uuid) to authenticated;
 grant execute on function public.member_role(uuid) to authenticated;
@@ -192,7 +194,7 @@ using (public.is_active_member(id));
 create policy restaurants_select_public_active
 on public.restaurants
 for select
-to anon
+to anon, authenticated
 using (status = 'active');
 
 create policy restaurant_settings_select_member
@@ -204,7 +206,7 @@ using (public.is_active_member(restaurant_id));
 create policy restaurant_settings_select_public_active
 on public.restaurant_settings
 for select
-to anon
+to anon, authenticated
 using (exists (
   select 1 from public.restaurants r
   where r.id = restaurant_settings.restaurant_id
@@ -247,7 +249,7 @@ using (public.is_active_member(restaurant_id));
 create policy categories_select_public_active
 on public.categories
 for select
-to anon
+to anon, authenticated
 using (active = true and exists (
   select 1 from public.restaurants r
   where r.id = categories.restaurant_id
@@ -276,7 +278,7 @@ using (public.is_active_member(restaurant_id));
 create policy products_select_public_active
 on public.products
 for select
-to anon
+to anon, authenticated
 using (active = true and available = true and exists (
   select 1 from public.restaurants r
   where r.id = products.restaurant_id
@@ -309,7 +311,7 @@ using (public.is_active_member(restaurant_id));
 create policy restaurant_tables_select_public_active
 on public.restaurant_tables
 for select
-to anon
+to anon, authenticated
 using (active = true and exists (
   select 1 from public.restaurants r
   where r.id = restaurant_tables.restaurant_id
@@ -345,12 +347,6 @@ for insert
 to authenticated
 with check (public.has_restaurant_role(restaurant_id, array['owner', 'manager', 'waiter']));
 
-create policy orders_update_staff
-on public.orders
-for update
-to authenticated
-using (public.has_restaurant_role(restaurant_id, array['owner', 'manager', 'kitchen', 'cashier', 'waiter']))
-with check (public.has_restaurant_role(restaurant_id, array['owner', 'manager', 'kitchen', 'cashier', 'waiter']));
 
 create policy order_items_select_member
 on public.order_items
@@ -364,9 +360,3 @@ for insert
 to authenticated
 with check (public.has_restaurant_role(restaurant_id, array['owner', 'manager', 'waiter']));
 
-create policy order_items_update_staff
-on public.order_items
-for update
-to authenticated
-using (public.has_restaurant_role(restaurant_id, array['owner', 'manager']))
-with check (public.has_restaurant_role(restaurant_id, array['owner', 'manager']));

@@ -138,7 +138,7 @@ for insert
 to authenticated
 with check (
   bucket_id = 'restaurant-assets'
-  and public.is_active_member((storage.foldername(name))[1]::uuid)
+  and public.has_restaurant_role((storage.foldername(name))[1]::uuid, array['owner', 'manager'])
 );
 
 create policy restaurant_assets_update_member

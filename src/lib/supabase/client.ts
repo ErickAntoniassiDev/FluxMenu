@@ -26,16 +26,32 @@ type SupabaseAuthResponse = {
 
 let currentAuthSession: SupabaseAuthSession | null = readStoredAuthSession();
 let supabaseRealtimeClient: SupabaseClient | null = null;
+let refreshInFlight: Promise<SupabaseAuthSession | null> | null = null;
+
+function isValidStoredSession(value: unknown): value is SupabaseAuthSession {
+  if (!value || typeof value !== 'object') return false;
+  const session = value as Partial<SupabaseAuthSession>;
+  return typeof session.accessToken === 'string'
+    && session.accessToken.length > 0
+    && typeof session.refreshToken === 'string'
+    && session.refreshToken.length > 0
+    && typeof session.expiresAt === 'number'
+    && typeof session.user?.id === 'string'
+    && session.user.id.length > 0
+    && typeof session.user?.email === 'string';
+}
 
 function readStoredAuthSession(): SupabaseAuthSession | null {
   const raw = localStorage.getItem(authStorageKey);
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as SupabaseAuthSession;
+    const parsed = JSON.parse(raw) as unknown;
+    if (isValidStoredSession(parsed)) return parsed;
   } catch {
-    localStorage.removeItem(authStorageKey);
-    return null;
+    // Invalid local auth cache is cleared below.
   }
+  localStorage.removeItem(authStorageKey);
+  return null;
 }
 
 function persistAuthSession(session: SupabaseAuthSession | null): void {
@@ -57,8 +73,9 @@ function toAuthSession(response: SupabaseAuthResponse): SupabaseAuthSession {
   };
 }
 
-function getAuthorizationToken(): string {
-  return currentAuthSession?.accessToken ?? supabaseAnonKey ?? '';
+async function getAuthorizationToken(): Promise<string> {
+  const session = await refreshStoredAuthSession();
+  return session?.accessToken ?? supabaseAnonKey ?? '';
 }
 
 export function getSupabaseBaseUrl(): string {
@@ -89,6 +106,12 @@ export function getSupabaseRealtimeClient(): SupabaseClient {
 export function syncSupabaseRealtimeAuth(): void {
   if (!supabaseRealtimeClient) return;
   supabaseRealtimeClient.realtime.setAuth(currentAuthSession?.accessToken ?? supabaseAnonKey);
+}
+
+export async function resetSupabaseRealtimeClient(): Promise<void> {
+  if (!supabaseRealtimeClient) return;
+  await supabaseRealtimeClient.removeAllChannels();
+  supabaseRealtimeClient.realtime.setAuth(supabaseAnonKey);
 }
 
 export function isSupabaseConfigured(): boolean {
@@ -185,40 +208,66 @@ export async function signInWithPassword(email: string, password: string): Promi
 
 export async function refreshStoredAuthSession(): Promise<SupabaseAuthSession | null> {
   if (!currentAuthSession) return null;
-  if (currentAuthSession.expiresAt > Date.now() + 30000) return currentAuthSession;
-
-  const baseUrl = getSupabaseBaseUrl();
-  const response = await fetch(baseUrl + '/auth/v1/token?grant_type=refresh_token', {
-    method: 'POST',
-    headers: {
-      apikey: supabaseAnonKey,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ refresh_token: currentAuthSession.refreshToken })
-  });
-
-  if (!response.ok) {
+  if (!currentAuthSession.refreshToken) {
     persistAuthSession(null);
     return null;
   }
+  if (currentAuthSession.expiresAt > Date.now() + 60000) return currentAuthSession;
+  if (refreshInFlight) return refreshInFlight;
 
-  const session = toAuthSession(await response.json() as SupabaseAuthResponse);
-  persistAuthSession(session);
-  return session;
+  const refreshToken = currentAuthSession.refreshToken;
+  refreshInFlight = (async () => {
+    const baseUrl = getSupabaseBaseUrl();
+    const response = await fetch(baseUrl + '/auth/v1/token?grant_type=refresh_token', {
+      method: 'POST',
+      headers: {
+        apikey: supabaseAnonKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ refresh_token: refreshToken })
+    });
+
+    if (!response.ok) {
+      persistAuthSession(null);
+      return null;
+    }
+
+    const payload = await response.json() as Partial<SupabaseAuthResponse>;
+    if (!payload.access_token || !payload.refresh_token || !payload.expires_in || !payload.user?.id) {
+      persistAuthSession(null);
+      return null;
+    }
+
+    if (!currentAuthSession || currentAuthSession.refreshToken !== refreshToken) {
+      return currentAuthSession;
+    }
+
+    const session = toAuthSession(payload as SupabaseAuthResponse);
+    persistAuthSession(session);
+    return session;
+  })().finally(() => {
+    refreshInFlight = null;
+  });
+
+  return refreshInFlight;
 }
 
 export async function signOutFromSupabase(): Promise<void> {
-  if (currentAuthSession) {
+  refreshInFlight = null;
+  const accessToken = currentAuthSession?.accessToken ?? null;
+  persistAuthSession(null);
+  await resetSupabaseRealtimeClient();
+
+  if (accessToken) {
     const baseUrl = getSupabaseBaseUrl();
     await fetch(baseUrl + '/auth/v1/logout', {
       method: 'POST',
       headers: {
         apikey: supabaseAnonKey,
-        Authorization: 'Bearer ' + currentAuthSession.accessToken
+        Authorization: 'Bearer ' + accessToken
       }
     }).catch(() => undefined);
   }
-  persistAuthSession(null);
 }
 
 export function logDataSource(scope: string, source: 'supabase' | 'fallback', details?: unknown): void {
@@ -235,11 +284,12 @@ export function logSupabaseFallback(scope: string, error: unknown): void {
 
 export async function selectFromSupabase<T>(tableName: string, query = 'select=*'): Promise<T[]> {
   const baseUrl = getSupabaseBaseUrl();
+  const token = await getAuthorizationToken();
   const response = await fetch(baseUrl + '/rest/v1/' + tableName + '?' + query, {
     method: 'GET',
     headers: {
       apikey: supabaseAnonKey,
-      Authorization: 'Bearer ' + getAuthorizationToken(),
+      Authorization: 'Bearer ' + token,
       'Content-Type': 'application/json'
     }
   });
@@ -253,11 +303,12 @@ export async function selectFromSupabase<T>(tableName: string, query = 'select=*
 
 export async function updateSupabaseRows<T>(tableName: string, query: string, payload: Record<string, unknown>): Promise<T[]> {
   const baseUrl = getSupabaseBaseUrl();
+  const token = await getAuthorizationToken();
   const response = await fetch(baseUrl + '/rest/v1/' + tableName + '?' + query, {
     method: 'PATCH',
     headers: {
       apikey: supabaseAnonKey,
-      Authorization: 'Bearer ' + getAuthorizationToken(),
+      Authorization: 'Bearer ' + token,
       'Content-Type': 'application/json',
       Prefer: 'return=representation'
     },
@@ -273,11 +324,12 @@ export async function updateSupabaseRows<T>(tableName: string, query: string, pa
 
 export async function uploadSupabaseAsset(bucketName: string, path: string, file: File): Promise<string> {
   const baseUrl = getSupabaseBaseUrl();
+  const token = await getAuthorizationToken();
   const response = await fetch(baseUrl + '/storage/v1/object/' + bucketName + '/' + path, {
     method: 'POST',
     headers: {
       apikey: supabaseAnonKey,
-      Authorization: 'Bearer ' + getAuthorizationToken(),
+      Authorization: 'Bearer ' + token,
       'Content-Type': file.type || 'application/octet-stream',
       'x-upsert': 'true'
     },
@@ -293,11 +345,12 @@ export async function uploadSupabaseAsset(bucketName: string, path: string, file
 
 export async function insertSupabaseRows<T>(tableName: string, payload: Record<string, unknown>): Promise<T[]> {
   const baseUrl = getSupabaseBaseUrl();
+  const token = await getAuthorizationToken();
   const response = await fetch(baseUrl + '/rest/v1/' + tableName, {
     method: 'POST',
     headers: {
       apikey: supabaseAnonKey,
-      Authorization: 'Bearer ' + getAuthorizationToken(),
+      Authorization: 'Bearer ' + token,
       'Content-Type': 'application/json',
       Prefer: 'return=representation'
     },
@@ -314,11 +367,12 @@ export async function insertSupabaseRows<T>(tableName: string, payload: Record<s
 
 export async function callSupabaseRpc<T>(functionName: string, payload: Record<string, unknown>): Promise<T> {
   const baseUrl = getSupabaseBaseUrl();
+  const token = await getAuthorizationToken();
   const response = await fetch(baseUrl + '/rest/v1/rpc/' + functionName, {
     method: 'POST',
     headers: {
       apikey: supabaseAnonKey,
-      Authorization: 'Bearer ' + getAuthorizationToken(),
+      Authorization: 'Bearer ' + token,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(payload)
@@ -340,11 +394,12 @@ export async function callSupabaseRpc<T>(functionName: string, payload: Record<s
 
 export async function invokeSupabaseFunction<T>(functionName: string, payload: Record<string, unknown>): Promise<T> {
   const baseUrl = getSupabaseBaseUrl();
+  const token = await getAuthorizationToken();
   const response = await fetch(baseUrl + '/functions/v1/' + functionName, {
     method: 'POST',
     headers: {
       apikey: supabaseAnonKey,
-      Authorization: 'Bearer ' + getAuthorizationToken(),
+      Authorization: 'Bearer ' + token,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(payload)

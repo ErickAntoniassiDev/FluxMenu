@@ -22,7 +22,7 @@ export const LoginScreen: React.FC = () => {
     try {
       if (mode === 'register') {
         await registerRestaurant(email.trim(), password, restaurantName.trim());
-        window.location.hash = '#/admin';
+        window.location.hash = '#/onboarding';
       } else {
         await login(email.trim(), password);
       }

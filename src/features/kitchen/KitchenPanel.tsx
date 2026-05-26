@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useApp } from '../../store/AppContext';
 import { KitchenOrderCard } from './KitchenOrderCard';
 import { ChefHat, Search, Trash2 } from 'lucide-react';
@@ -6,12 +6,17 @@ import { ChefHat, Search, Trash2 } from 'lucide-react';
 export const KitchenPanel: React.FC = () => {
   const {
     orders,
-    clearAllOrders,
-    tick
+    clearAllOrders
   } = useApp();
 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [priorityFilter, setPriorityFilter] = useState<string>('todos');
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   // Compute live operational metrics
   const stats = useMemo(() => {
@@ -26,7 +31,7 @@ export const KitchenPanel: React.FC = () => {
       else if (order.status === 'pronto') prontoCount++;
 
       // Delayed: more than 10 mins and not served
-      const elapsedMins = (Date.now() - new Date(order.createdAt).getTime()) / 1000 / 60;
+      const elapsedMins = (currentTime - new Date(order.createdAt).getTime()) / 1000 / 60;
       if (order.status !== 'entregue' && elapsedMins >= 10) {
         delayedCount++;
       }
@@ -39,7 +44,7 @@ export const KitchenPanel: React.FC = () => {
       delayed: delayedCount,
       total: orders.length
     };
-  }, [orders, tick]);
+  }, [orders, currentTime]);
 
   // Live filter orders array
   const filteredOrders = useMemo(() => {
@@ -169,7 +174,7 @@ export const KitchenPanel: React.FC = () => {
                 </div>
               ) : (
                 columnNew.map(order => (
-                  <KitchenOrderCard key={order.id} order={order} />
+                  <KitchenOrderCard key={order.id} order={order} currentTime={currentTime} />
                 ))
               )}
             </div>
@@ -193,7 +198,7 @@ export const KitchenPanel: React.FC = () => {
                 </div>
               ) : (
                 columnPrep.map(order => (
-                  <KitchenOrderCard key={order.id} order={order} />
+                  <KitchenOrderCard key={order.id} order={order} currentTime={currentTime} />
                 ))
               )}
             </div>
@@ -217,7 +222,7 @@ export const KitchenPanel: React.FC = () => {
                 </div>
               ) : (
                 columnReady.map(order => (
-                  <KitchenOrderCard key={order.id} order={order} />
+                  <KitchenOrderCard key={order.id} order={order} currentTime={currentTime} />
                 ))
               )}
             </div>

@@ -1,4 +1,4 @@
-import { callSupabaseRpc, getSupabaseRealtimeClient, selectFromSupabase, updateSupabaseRows } from '../../lib/supabase/client';
+import { callSupabaseRpc, getSupabaseRealtimeClient, selectFromSupabase } from '../../lib/supabase/client';
 import { CartItem, Order, OrderItem, OrderStatus, RestaurantId } from '../../types';
 
 export type CreateOrderInput = {
@@ -53,6 +53,8 @@ type RpcOrderPayload = {
   priority: Order['priority'];
   notes?: string | null;
   total: number | string;
+  payment_status?: 'pendente' | 'pago' | 'parcial' | 'cancelado' | null;
+  payment_method?: 'pix' | 'credito' | 'debito' | 'dinheiro' | null;
   created_at: string;
   updated_at: string;
   items: RpcOrderItem[];
@@ -97,7 +99,8 @@ function mapRpcOrder(row: RpcOrderPayload): Order {
     total: Number(row.total),
     priority: row.priority,
     notes: row.notes ?? '',
-    paymentStatus: 'pendente'
+    paymentStatus: row.payment_status === 'pago' ? 'pago' : 'pendente',
+    paymentMethod: row.payment_method ?? undefined
   };
 }
 
@@ -139,15 +142,12 @@ export async function createOrderFromQr(input: CreateOrderInput): Promise<Order>
 }
 
 export async function updateOrderStatus(restaurantId: RestaurantId, publicCode: string, nextStatus: OrderStatus): Promise<Order> {
-  const rows = await updateSupabaseRows<SupabaseOrderRow>(
-    'orders',
-    'restaurant_id=eq.' + encodeURIComponent(restaurantId) + '&public_code=eq.' + encodeURIComponent(publicCode),
-    { status: nextStatus }
-  );
-  const updated = rows[0];
-  if (!updated) throw new Error('Order status update returned no rows.');
-  const itemRows = await selectFromSupabase<SupabaseOrderItemRow>('order_items', 'select=*&restaurant_id=eq.' + encodeURIComponent(restaurantId) + '&order_id=eq.' + encodeURIComponent(updated.id));
-  return mapOrder(updated, itemRows);
+  const updated = await callSupabaseRpc<RpcOrderPayload>('update_order_status', {
+    p_restaurant_id: restaurantId,
+    p_public_code: publicCode,
+    p_status: nextStatus
+  });
+  return mapRpcOrder(updated);
 }
 
 export function subscribeToRestaurantOrders(restaurantId: RestaurantId, onChange: () => void): () => void {

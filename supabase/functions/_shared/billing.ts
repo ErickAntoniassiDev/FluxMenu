@@ -34,16 +34,22 @@ export function asaasBaseUrl(): string {
 
 export class AsaasRequestError extends Error {
   status: number;
+  endpoint: string;
+  responseBody: unknown;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, endpoint: string, message: string, responseBody: unknown = null) {
     super(message);
     this.name = 'AsaasRequestError';
     this.status = status;
+    this.endpoint = endpoint;
+    this.responseBody = responseBody;
   }
 }
 
 export async function asaasFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(asaasBaseUrl().replace(/\/$/, '') + path, {
+  const baseUrl = asaasBaseUrl().replace(/\/$/, '');
+  const endpoint = baseUrl + path;
+  const response = await fetch(endpoint, {
     ...init,
     headers: {
       access_token: requiredEnv('ASAAS_API_KEY'),
@@ -54,13 +60,18 @@ export async function asaasFetch<T>(path: string, init: RequestInit = {}): Promi
 
   if (!response.ok) {
     let message = 'Asaas request failed: ' + response.status;
-    try {
-      const payload = await response.json() as { errors?: Array<{ description?: string }>; message?: string };
-      message = payload.errors?.map(error => error.description).filter(Boolean).join('; ') || payload.message || message;
-    } catch {
-      // Avoid logging response body with sensitive data.
+    let responseBody: unknown = null;
+    const bodyText = await response.text().catch(() => '');
+    if (bodyText) {
+      try {
+        const payload = JSON.parse(bodyText) as { errors?: Array<{ description?: string }>; message?: string };
+        responseBody = payload;
+        message = payload.errors?.map(error => error.description).filter(Boolean).join('; ') || payload.message || message;
+      } catch {
+        responseBody = bodyText;
+      }
     }
-    throw new AsaasRequestError(response.status, message);
+    throw new AsaasRequestError(response.status, endpoint, message, responseBody);
   }
 
   if (response.status === 204) return undefined as T;

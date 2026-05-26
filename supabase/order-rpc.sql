@@ -170,6 +170,82 @@ $$;
 
 grant execute on function public.create_order_from_qr(uuid, text, jsonb) to anon, authenticated;
 
+
+create or replace function public.update_order_status(
+  p_restaurant_id uuid,
+  p_public_code text,
+  p_status text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_order public.orders%rowtype;
+  v_items jsonb;
+begin
+  if auth.uid() is null then
+    raise exception 'Usuário autenticado obrigatório.';
+  end if;
+
+  if p_restaurant_id is null then
+    raise exception 'Restaurante obrigatório.';
+  end if;
+
+  if not public.has_restaurant_role(p_restaurant_id, array['owner', 'manager', 'kitchen']) then
+    raise exception 'Usuário sem permissão para atualizar produção.';
+  end if;
+
+  if p_status not in ('novo', 'preparo', 'pronto', 'entregue') then
+    raise exception 'Status de pedido inválido.';
+  end if;
+
+  update public.orders
+  set status = p_status,
+      updated_at = now()
+  where restaurant_id = p_restaurant_id
+    and public_code = p_public_code
+    and status <> 'cancelado'
+  returning * into v_order;
+
+  if not found then
+    raise exception 'Pedido não encontrado ou sem permissão.';
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'product_id', oi.product_id,
+    'product_name_snapshot', oi.product_name_snapshot,
+    'unit_price_snapshot', oi.unit_price_snapshot,
+    'quantity', oi.quantity,
+    'observation', oi.observation,
+    'total', oi.total
+  ) order by oi.created_at), '[]'::jsonb)
+  into v_items
+  from public.order_items oi
+  where oi.restaurant_id = p_restaurant_id
+    and oi.order_id = v_order.id;
+
+  return jsonb_build_object(
+    'id', v_order.id,
+    'public_code', v_order.public_code,
+    'restaurant_id', v_order.restaurant_id,
+    'table_label_snapshot', v_order.table_label_snapshot,
+    'status', v_order.status,
+    'priority', v_order.priority,
+    'notes', v_order.notes,
+    'total', v_order.total,
+    'payment_status', v_order.payment_status,
+    'payment_method', v_order.payment_method,
+    'created_at', v_order.created_at,
+    'updated_at', v_order.updated_at,
+    'items', v_items
+  );
+end;
+$$;
+
+grant execute on function public.update_order_status(uuid, text, text) to authenticated;
+
 -- Enable Postgres Changes for kitchen realtime listeners.
 do $$
 begin
