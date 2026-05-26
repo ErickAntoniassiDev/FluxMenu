@@ -138,6 +138,14 @@ export interface Toast {
   type: 'success' | 'info' | 'warning';
 }
 
+export interface OpeningHoursDay {
+  open: string;
+  close: string;
+  closed: boolean;
+}
+
+export type OpeningHoursConfig = Record<string, OpeningHoursDay | string>;
+
 export interface RestaurantConfig {
   restaurantId: RestaurantId;
   slug?: string;
@@ -151,7 +159,7 @@ export interface RestaurantConfig {
   bannerUrl?: string;
   primaryColor?: string;
   secondaryColor?: string;
-  openingHours?: Record<string, string>;
+  openingHours?: OpeningHoursConfig;
 }
 
 export type UserRole = 'owner' | 'manager' | 'kitchen' | 'cashier' | 'waiter' | 'customer';

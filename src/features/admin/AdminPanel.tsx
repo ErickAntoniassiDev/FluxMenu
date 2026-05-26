@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { useApp } from '../../store/AppContext';
-import { CategoryOption, Product, RestaurantConfig, RestaurantTable, UserRole } from '../../types';
+import { CategoryOption, OpeningHoursDay, Product, RestaurantConfig, RestaurantTable, UserRole } from '../../types';
 import * as AnalyticsService from '../../services/analyticsService';
 import * as TableService from '../../services/tableService';
 import * as StaffService from '../../services/staffService';
@@ -85,7 +85,6 @@ export const AdminPanel: React.FC = () => {
 
   const canUseAnalytics = canUseFeature('analytics');
   const canUseAI = canUseFeature('ai');
-  const canUseAdvancedCustomization = canUseFeature('advanced_customization');
   const canUseAdvancedPermissions = canUseFeature('advanced_permissions');
   const canRemoveBranding = canUseFeature('remove_fluxmenu_branding');
 
@@ -130,6 +129,7 @@ export const AdminPanel: React.FC = () => {
   const [settingsDraft, setSettingsDraft] = useState<RestaurantConfig>(restaurantConfig);
   const [settingsLoading, setSettingsLoading] = useState<string | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [settingsSuccess, setSettingsSuccess] = useState<string | null>(null);
   const [billingLoading, setBillingLoading] = useState<string | null>(null);
   const [billingError, setBillingError] = useState<string | null>(null);
   const [billingCpfCnpj, setBillingCpfCnpj] = useState('');
@@ -142,14 +142,73 @@ export const AdminPanel: React.FC = () => {
   const canInviteStaff = canManageStaff && canUseFeature('multi_user_rbac') && staffLimitDecision.allowed;
   const assignableRoles = StaffService.getAssignableRoles(currentUser.role);
   const weekDays = [
-    ['mon', 'Segunda'],
-    ['tue', 'Terça'],
-    ['wed', 'Quarta'],
-    ['thu', 'Quinta'],
-    ['fri', 'Sexta'],
-    ['sat', 'Sábado'],
-    ['sun', 'Domingo']
+    ['monday', 'Segunda'],
+    ['tuesday', 'Terça'],
+    ['wednesday', 'Quarta'],
+    ['thursday', 'Quinta'],
+    ['friday', 'Sexta'],
+    ['saturday', 'Sábado'],
+    ['sunday', 'Domingo']
   ] as const;
+
+  const legacyWeekDayKeys: Record<string, string> = {
+    monday: 'mon',
+    tuesday: 'tue',
+    wednesday: 'wed',
+    thursday: 'thu',
+    friday: 'fri',
+    saturday: 'sat',
+    sunday: 'sun'
+  };
+
+  const emptyOpeningDay: OpeningHoursDay = { open: '', close: '', closed: true };
+
+  const parseOpeningHourText = (value: string): OpeningHoursDay => {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized || normalized === 'fechado' || normalized === 'closed') return { ...emptyOpeningDay };
+    const [open = '', close = ''] = normalized.split('-').map(part => part.trim());
+    return { open, close, closed: false };
+  };
+
+  const getOpeningDay = (config: RestaurantConfig, day: string): OpeningHoursDay => {
+    const hours = config.openingHours ?? {};
+    const value = hours[day] ?? hours[legacyWeekDayKeys[day]];
+    if (!value) return { ...emptyOpeningDay };
+    if (typeof value === 'string') return parseOpeningHourText(value);
+    return {
+      open: value.open ?? '',
+      close: value.close ?? '',
+      closed: Boolean(value.closed)
+    };
+  };
+
+  const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+  const normalizeOpeningHours = (config: RestaurantConfig): Record<string, OpeningHoursDay> => {
+    return Object.fromEntries(weekDays.map(([day]) => {
+      const value = getOpeningDay(config, day);
+      const open = value.open.trim();
+      const close = value.close.trim();
+      const closed = value.closed || (!open && !close);
+      if (!closed && (!timePattern.test(open) || !timePattern.test(close))) {
+        throw new Error('Horário inválido em ' + day + '. Use o formato 11:00-23:00 ou marque fechado.');
+      }
+      return [day, { open: closed ? '' : open, close: closed ? '' : close, closed }];
+    }));
+  };
+
+  const updateOpeningDay = (day: string, partial: Partial<OpeningHoursDay>) => {
+    setSettingsDraft(prev => {
+      const current = getOpeningDay(prev, day);
+      return {
+        ...prev,
+        openingHours: {
+          ...(prev.openingHours ?? {}),
+          [day]: { ...current, ...partial }
+        }
+      };
+    });
+  };
 
   useEffect(() => {
     setSettingsDraft(restaurantConfig);
@@ -472,16 +531,17 @@ export const AdminPanel: React.FC = () => {
 
   const handleSaveSettings = async () => {
     setSettingsError(null);
-    const advancedCustomizationChanged = settingsDraft.bannerUrl !== restaurantConfig.bannerUrl
-      || settingsDraft.secondaryColor !== restaurantConfig.secondaryColor
-      || JSON.stringify(settingsDraft.openingHours ?? {}) !== JSON.stringify(restaurantConfig.openingHours ?? {});
-    if (advancedCustomizationChanged && !canUseAdvancedCustomization) {
-      setSettingsError('Banner, cor secundária e horários personalizados estão disponíveis no plano Premium.');
+    setSettingsSuccess(null);
+    if (!settingsDraft.name.trim()) {
+      setSettingsError('Nome oficial da loja é obrigatório.');
       return;
     }
     setSettingsLoading('settings');
     try {
-      await setRestaurantConfig(settingsDraft);
+      const normalizedOpeningHours = normalizeOpeningHours(settingsDraft);
+      await setRestaurantConfig({ ...settingsDraft, openingHours: normalizedOpeningHours });
+      setSettingsDraft(prev => ({ ...prev, openingHours: normalizedOpeningHours }));
+      setSettingsSuccess('Configurações da loja salvas com sucesso.');
     } catch (error) {
       setSettingsError(error instanceof Error ? error.message : 'Não foi possível salvar configurações.');
     } finally {
@@ -492,10 +552,7 @@ export const AdminPanel: React.FC = () => {
   const handleAssetUpload = async (kind: 'logo' | 'banner', file: File | null) => {
     if (!file) return;
     setSettingsError(null);
-    if (kind === 'banner' && !canUseAdvancedCustomization) {
-      setSettingsError('Banner personalizado está disponível no plano Premium.');
-      return;
-    }
+    setSettingsSuccess(null);
     setSettingsLoading(kind);
     try {
       const url = await AssetService.uploadRestaurantAsset(activeRestaurantId, kind, file);
@@ -506,14 +563,6 @@ export const AdminPanel: React.FC = () => {
       setSettingsLoading(null);
     }
   };
-
-  const updateOpeningHour = (day: string, value: string) => {
-    setSettingsDraft(prev => ({
-      ...prev,
-      openingHours: { ...(prev.openingHours ?? {}), [day]: value }
-    }));
-  };
-
 
   const runBillingAction = async (loadingKey: string, action: () => Promise<void>) => {
     setBillingError(null);
@@ -1284,6 +1333,7 @@ export const AdminPanel: React.FC = () => {
 
             {!canManageRestaurant && <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">Seu perfil não pode editar a loja.</div>}
             {settingsError && <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold">{settingsError}</div>}
+            {settingsSuccess && <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold">{settingsSuccess}</div>}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5"><label className="text-xs font-bold text-slate-500">Nome Oficial</label><input value={settingsDraft.name} onChange={(e) => setSettingsDraft({ ...settingsDraft, name: e.target.value })} disabled={!canManageRestaurant} className="w-full p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 font-bold text-slate-800 disabled:opacity-60" /></div>
@@ -1295,19 +1345,45 @@ export const AdminPanel: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2 border border-slate-200 rounded-xl p-4"><div className="flex items-center gap-2 text-xs font-black uppercase text-slate-900"><ImageIcon className="w-4 h-4" />Logo</div>{settingsDraft.logoUrl && <img src={settingsDraft.logoUrl} alt="Logo" className="w-20 h-20 object-cover rounded-xl border border-slate-200" />}<input type="file" accept="image/*" disabled={!canManageRestaurant || settingsLoading === 'logo'} onChange={(e) => void handleAssetUpload('logo', e.target.files?.[0] ?? null)} className="text-xs" /></div>
-              <div className="space-y-2 border border-slate-200 rounded-xl p-4"><div className="flex items-center gap-2 text-xs font-black uppercase text-slate-900"><ImageIcon className="w-4 h-4" />Banner</div>{settingsDraft.bannerUrl && <img src={settingsDraft.bannerUrl} alt="Banner" className="w-full h-24 object-cover rounded-xl border border-slate-200" />}<input type="file" accept="image/*" disabled={!canManageRestaurant || !canUseAdvancedCustomization || settingsLoading === 'banner'} onChange={(e) => void handleAssetUpload('banner', e.target.files?.[0] ?? null)} className="text-xs" /></div>
+              <div className="space-y-3 border border-slate-200 rounded-xl p-4">
+                <div className="flex items-center gap-2 text-xs font-black uppercase text-slate-900"><ImageIcon className="w-4 h-4" />Logo</div>
+                {settingsDraft.logoUrl ? <img src={settingsDraft.logoUrl} alt="Logo" className="w-20 h-20 object-cover rounded-xl border border-slate-200" /> : <div className="w-20 h-20 rounded-xl border border-dashed border-slate-250 bg-slate-50 flex items-center justify-center text-slate-350"><ImageIcon className="w-5 h-5" /></div>}
+                <input type="file" accept="image/jpeg,image/png,image/webp" disabled={!canManageRestaurant || settingsLoading === 'logo'} onChange={(e) => void handleAssetUpload('logo', e.target.files?.[0] ?? null)} className="text-xs w-full" />
+                <p className="text-[10px] text-slate-400 font-semibold">JPG, PNG ou WEBP. Salvo como restaurant-assets/{activeRestaurantId}/logo.webp.</p>
+              </div>
+              <div className="space-y-3 border border-slate-200 rounded-xl p-4">
+                <div className="flex items-center gap-2 text-xs font-black uppercase text-slate-900"><ImageIcon className="w-4 h-4" />Banner</div>
+                {settingsDraft.bannerUrl ? <img src={settingsDraft.bannerUrl} alt="Banner" className="w-full h-24 object-cover rounded-xl border border-slate-200" /> : <div className="w-full h-24 rounded-xl border border-dashed border-slate-250 bg-slate-50 flex items-center justify-center text-slate-350"><ImageIcon className="w-5 h-5" /></div>}
+                <input type="file" accept="image/jpeg,image/png,image/webp" disabled={!canManageRestaurant || settingsLoading === 'banner'} onChange={(e) => void handleAssetUpload('banner', e.target.files?.[0] ?? null)} className="text-xs w-full" />
+                <p className="text-[10px] text-slate-400 font-semibold">JPG, PNG ou WEBP. Salvo como restaurant-assets/{activeRestaurantId}/banner.webp.</p>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5"><label className="text-xs font-bold text-slate-500 flex items-center gap-1"><Palette className="w-3.5 h-3.5" />Cor primária</label><input type="color" value={settingsDraft.primaryColor ?? '#dc2626'} onChange={(e) => setSettingsDraft({ ...settingsDraft, primaryColor: e.target.value })} disabled={!canManageRestaurant} className="w-full h-10 border border-slate-200 rounded-lg" /></div>
-              <div className="space-y-1.5"><label className="text-xs font-bold text-slate-500 flex items-center gap-1"><Palette className="w-3.5 h-3.5" />Cor secundária</label><input type="color" value={settingsDraft.secondaryColor ?? '#0f172a'} onChange={(e) => setSettingsDraft({ ...settingsDraft, secondaryColor: e.target.value })} disabled={!canManageRestaurant || !canUseAdvancedCustomization} className="w-full h-10 border border-slate-200 rounded-lg disabled:opacity-60" /></div>
+              <div className="space-y-1.5"><label className="text-xs font-bold text-slate-500 flex items-center gap-1"><Palette className="w-3.5 h-3.5" />Cor secundária</label><input type="color" value={settingsDraft.secondaryColor ?? '#0f172a'} onChange={(e) => setSettingsDraft({ ...settingsDraft, secondaryColor: e.target.value })} disabled={!canManageRestaurant} className="w-full h-10 border border-slate-200 rounded-lg disabled:opacity-60" /></div>
             </div>
 
             <div className="space-y-3">
               <h5 className="text-xs font-black uppercase text-slate-900 tracking-wider flex items-center gap-2"><Clock className="w-4 h-4" />Horários</h5>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-                {weekDays.map(([key, label]) => <div key={key} className="space-y-1"><label className="text-[10px] font-bold uppercase text-slate-400">{label}</label><input value={settingsDraft.openingHours?.[key] ?? ''} onChange={(e) => updateOpeningHour(key, e.target.value)} placeholder="11:00-23:00 ou fechado" disabled={!canManageRestaurant || !canUseAdvancedCustomization} className="w-full p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 disabled:opacity-60" /></div>)}
+                {weekDays.map(([key, label]) => {
+                  const day = getOpeningDay(settingsDraft, key);
+                  return (
+                    <div key={key} className="space-y-2 rounded-xl border border-slate-200 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="text-[10px] font-bold uppercase text-slate-500">{label}</label>
+                        <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                          <input type="checkbox" checked={day.closed} disabled={!canManageRestaurant} onChange={(e) => updateOpeningDay(key, { closed: e.target.checked })} /> Fechado
+                        </label>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input value={day.open} onChange={(e) => updateOpeningDay(key, { open: e.target.value, closed: false })} placeholder="11:00" disabled={!canManageRestaurant || day.closed} className="w-full p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 disabled:opacity-60" />
+                        <input value={day.close} onChange={(e) => updateOpeningDay(key, { close: e.target.value, closed: false })} placeholder="23:00" disabled={!canManageRestaurant || day.closed} className="w-full p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 disabled:opacity-60" />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

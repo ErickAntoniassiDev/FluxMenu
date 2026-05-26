@@ -1,5 +1,5 @@
 import { selectFromSupabase, updateSupabaseRows } from '../../lib/supabase/client';
-import { Restaurant, RestaurantConfig } from '../../types';
+import { OpeningHoursConfig, Restaurant, RestaurantConfig } from '../../types';
 
 type SupabaseRestaurantRow = {
   id: string;
@@ -20,7 +20,7 @@ type SupabaseRestaurantSettingsRow = {
   banner_url?: string | null;
   primary_color?: string | null;
   secondary_color?: string | null;
-  opening_hours?: Record<string, string> | null;
+  opening_hours?: OpeningHoursConfig | null;
   restaurant?: { slug?: string | null; name?: string | null } | null;
 };
 

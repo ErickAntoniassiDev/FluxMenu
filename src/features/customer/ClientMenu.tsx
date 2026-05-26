@@ -2,13 +2,13 @@ import React, { useState, useMemo } from 'react';
 import { useApp } from '../../store/AppContext';
 import { Product } from '../../types';
 import { getMenuCategories } from '../../services/catalogService';
-import { Image as ImageIcon, ShoppingCart, Search } from 'lucide-react';
+import { Clock, Image as ImageIcon, Instagram, MapPin, ShoppingCart, Search, Star } from 'lucide-react';
 import { ProductModal } from './ProductModal';
 import { CartSidebar } from './CartSidebar';
 import { AnimatePresence, motion } from 'motion/react';
 
 export const ClientMenu: React.FC = () => {
-  const { activeRestaurantId, canUseFeature, products, cart, tableNumber, publicRouteError } = useApp();
+  const { activeRestaurantId, canUseFeature, products, cart, tableNumber, publicRouteError, restaurantConfig } = useApp();
   const categories = getMenuCategories(activeRestaurantId);
   const canRemoveBranding = canUseFeature('remove_fluxmenu_branding');
 
@@ -29,6 +29,19 @@ export const ClientMenu: React.FC = () => {
     });
   }, [products, selectedCategory, searchQuery]);
 
+  const primaryColor = restaurantConfig.primaryColor || '#dc2626';
+  const secondaryColor = restaurantConfig.secondaryColor || '#0f172a';
+  const todayKey = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
+  const todayHours = restaurantConfig.openingHours?.[todayKey];
+  const todayHoursLabel = typeof todayHours === 'string'
+    ? todayHours
+    : todayHours?.closed
+      ? 'Fechado hoje'
+      : todayHours?.open && todayHours?.close
+        ? todayHours.open + '-' + todayHours.close
+        : null;
+  const instagramHandle = restaurantConfig.instagram?.replace(/^@/, '').trim();
+
   // Cart indicators
   const cartItemCount = cart.reduce((acc, item) => acc + item.quantity, 0);
   const cartTotalVal = cart.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
@@ -47,20 +60,42 @@ export const ClientMenu: React.FC = () => {
   return (
     <div className="flex flex-col h-full bg-slate-50/50 animate-fade-in relative" id="client-menu-container">
       {/* Search and Header filters overlay bar */}
-      <div className="bg-white p-4 md:p-6 border-b border-slate-100 flex flex-col md:flex-row gap-4 items-center justify-between shrink-0">
-        <div>
-          <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-tight flex items-center gap-2">
-            <span className="w-1.5 h-3.5 bg-red-600 rounded-xs inline-block"></span>
-            Cardápio Interativo ({tableNumber})
-          </h2>
-          <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5 tracking-wider">
-            Selecione seus itens e envie para a cozinha.
-            {!canRemoveBranding && <span className="ml-1 text-red-600">Powered by FluxMenu</span>}
-          </p>
+      <div className="bg-white border-b border-slate-100 shrink-0">
+        <div className="relative min-h-32 overflow-hidden border-b border-slate-100">
+          {restaurantConfig.bannerUrl ? (
+            <img src={restaurantConfig.bannerUrl} alt={restaurantConfig.name} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+          ) : (
+            <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, ' + secondaryColor + ', #111827)' }} />
+          )}
+          <div className="absolute inset-0 bg-slate-950/55" />
+          <div className="relative p-4 md:p-6 flex items-end gap-3 min-h-32 text-white">
+            {restaurantConfig.logoUrl ? (
+              <img src={restaurantConfig.logoUrl} alt={restaurantConfig.name} loading="lazy" decoding="async" className="w-16 h-16 rounded-2xl object-cover border border-white/30 bg-white shadow-lg" />
+            ) : (
+              <div className="w-16 h-16 rounded-2xl border border-white/25 bg-white/10 backdrop-blur-xs flex items-center justify-center">
+                <ImageIcon className="w-6 h-6" />
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg md:text-xl font-extrabold uppercase tracking-tight truncate">{restaurantConfig.name}</h2>
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold uppercase text-white/85">
+                {restaurantConfig.rating && <span className="inline-flex items-center gap-1"><Star className="w-3 h-3" style={{ color: primaryColor }} />{restaurantConfig.rating}</span>}
+                {restaurantConfig.deliveryEstimate && <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" />{restaurantConfig.deliveryEstimate}</span>}
+                {todayHoursLabel && <span>{todayHoursLabel}</span>}
+                {restaurantConfig.address && <span className="inline-flex items-center gap-1 min-w-0"><MapPin className="w-3 h-3 shrink-0" /><span className="truncate max-w-[14rem]">{restaurantConfig.address}</span></span>}
+                {instagramHandle && <span className="inline-flex items-center gap-1"><Instagram className="w-3 h-3" />@{instagramHandle}</span>}
+              </div>
+              <p className="text-[10px] text-white/65 font-bold uppercase mt-1 tracking-wider">
+                Mesa {tableNumber}. Selecione seus itens e envie para a cozinha.
+                {!canRemoveBranding && <span className="ml-1" style={{ color: primaryColor }}>Powered by FluxMenu</span>}
+              </p>
+            </div>
+          </div>
         </div>
 
+        <div className="p-4 md:p-6 flex flex-col md:flex-row gap-4 items-center justify-between">
         {/* Input box and Portal Link */}
-        <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end shrink-0">
+        <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end shrink-0 md:ml-auto">
           <div className="relative flex-1 md:w-64 shrink-0">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
@@ -69,19 +104,22 @@ export const ClientMenu: React.FC = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Pesquisar pratos, bebidas..."
-              className="w-full pl-9 pr-4 py-2 bg-slate-50 rounded-xl border border-slate-200 focus:border-red-650 focus:bg-white text-xs text-slate-800 outline-hidden tracking-tight transition"
+              className="w-full pl-9 pr-4 py-2 bg-slate-50 rounded-xl border border-slate-200 focus:bg-white text-xs text-slate-800 outline-hidden tracking-tight transition"
+              style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
               id="client-search-input"
             />
           </div>
 
           <a
             href="#/portal"
-            className="px-3 py-2 rounded-xl text-[10px] uppercase font-black tracking-wider text-red-650 border border-red-100 bg-red-50/30 hover:bg-red-50 hover:text-red-750 transition flex items-center gap-1.5 cursor-pointer select-none"
+            className="px-3 py-2 rounded-xl text-[10px] uppercase font-black tracking-wider border bg-white hover:bg-slate-50 transition flex items-center gap-1.5 cursor-pointer select-none"
+            style={{ color: primaryColor, borderColor: primaryColor + '33' }}
             aria-label="Acessar portal administrativo"
             title="Clique para acessar o Portal Administrativo com perfis operacionais, KDS de Cozinha e Caixa"
           >
             <span>🔐 Portal</span>
           </a>
+        </div>
         </div>
       </div>
 
@@ -99,6 +137,7 @@ export const ClientMenu: React.FC = () => {
                 : 'bg-slate-55 text-slate-500 hover:text-slate-800 hover:bg-slate-100 border-transparent'
             }`}
             id={`category-tab-${cat.id}`}
+            style={selectedCategory === cat.id ? { backgroundColor: primaryColor, borderColor: primaryColor } : undefined}
           >
             {cat.label}
           </button>
@@ -183,7 +222,7 @@ export const ClientMenu: React.FC = () => {
                       </span>
                       
                       {isAvailable ? (
-                        <button type="button" aria-label={`Adicionar ${product.name}`} className="px-2.5 py-1.5 rounded-lg bg-red-50 text-red-650 font-black text-[10px] group-hover:bg-red-600 group-hover:text-white transition cursor-pointer select-none border border-red-100">
+                        <button type="button" aria-label={`Adicionar ${product.name}`} className="px-2.5 py-1.5 rounded-lg bg-white font-black text-[10px] transition cursor-pointer select-none border" style={{ color: primaryColor, borderColor: primaryColor + '33' }}>
                           + Adicionar
                         </button>
                       ) : (
@@ -212,7 +251,8 @@ export const ClientMenu: React.FC = () => {
               onClick={() => setIsCartOpen(true)}
               type="button"
               aria-label="Abrir carrinho"
-              className="w-full bg-red-650 hover:bg-red-700 text-white rounded-xl py-3.5 px-4 flex items-center justify-between shadow-lg hover:shadow-xl transition active:scale-98 cursor-pointer border border-red-750"
+              className="w-full text-white rounded-xl py-3.5 px-4 flex items-center justify-between shadow-lg hover:shadow-xl transition active:scale-98 cursor-pointer border"
+              style={{ backgroundColor: primaryColor, borderColor: primaryColor }}
             >
               <div className="flex items-center gap-2.5">
                 <span className="relative p-1.5 rounded-lg bg-red-750">
