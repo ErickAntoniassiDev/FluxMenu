@@ -27,9 +27,16 @@ export async function loadInvitations(restaurantId: RestaurantId): Promise<Staff
   return StaffRepository.findInvitationsForRestaurant(restaurantId);
 }
 
-export async function inviteStaff(restaurantId: RestaurantId, email: string, role: UserRole, actorRole: UserRole): Promise<StaffInvitation> {
+export async function inviteStaff(restaurantId: RestaurantId, email: string, role: UserRole, actorRole: UserRole, actorEmail?: string): Promise<{ invitation: StaffInvitation; emailSent: boolean; message: string; manualLink?: string | null }> {
   assertCanManageRole(actorRole, role);
-  return StaffRepository.createStaffInvitation(restaurantId, email, role);
+  if (actorEmail && actorEmail.trim().toLowerCase() === email.trim().toLowerCase()) {
+    throw new Error('Use outro email. Você não pode convidar a própria conta.');
+  }
+  return StaffRepository.sendStaffInvitation(restaurantId, email, role);
+}
+
+export async function acceptStaffInvitation(token: string): Promise<StaffRepository.AcceptedInvitation> {
+  return StaffRepository.acceptStaffInvitation(token);
 }
 
 export async function updateStaffRole(restaurantId: RestaurantId, memberId: string, role: UserRole, actorRole: UserRole): Promise<StaffMember> {
@@ -38,12 +45,24 @@ export async function updateStaffRole(restaurantId: RestaurantId, memberId: stri
 }
 
 export async function setStaffActive(restaurantId: RestaurantId, memberId: string, active: boolean, actorRole: UserRole, targetRole: UserRole): Promise<StaffMember> {
-  if (targetRole === 'owner') throw new Error('Owner não pode ser desativado por esta tela.');
-  if (actorRole === 'manager' && targetRole === 'manager') throw new Error('Manager não pode alterar outro manager.');
+  if (targetRole === 'owner') throw new Error('O dono da conta não pode ser desativado por esta tela.');
+  if (actorRole === 'manager' && targetRole === 'manager') throw new Error('Gerente não pode alterar outro gerente.');
   if (actorRole !== 'owner' && actorRole !== 'manager') throw new Error('Seu perfil não pode alterar funcionários.');
   return StaffRepository.setStaffMemberActive(restaurantId, memberId, active);
 }
 
+
+export async function removeStaffMember(restaurantId: RestaurantId, member: StaffMember, actorRole: UserRole): Promise<void> {
+  if (member.role === 'owner') throw new Error('O dono da conta não pode ser removido.');
+  if (actorRole === 'manager' && member.role === 'manager') throw new Error('Gerente não pode remover outro gerente.');
+  if (actorRole !== 'owner' && actorRole !== 'manager') throw new Error('Seu perfil não pode remover funcionários.');
+  await StaffRepository.removeStaffMember(restaurantId, member.id);
+}
+
 export async function revokeInvitation(restaurantId: RestaurantId, invitationId: string): Promise<StaffInvitation> {
   return StaffRepository.revokeStaffInvitation(restaurantId, invitationId);
+}
+
+export async function clearInvitation(restaurantId: RestaurantId, invitationId: string): Promise<void> {
+  await StaffRepository.clearStaffInvitation(restaurantId, invitationId);
 }

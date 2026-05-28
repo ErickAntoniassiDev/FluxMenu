@@ -2,14 +2,22 @@ import React, { useState } from 'react';
 import { Lock, LogIn, Store, UserPlus } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 
+function isInviteLoginRoute(): boolean {
+  const hash = window.location.hash;
+  const query = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : window.location.search.replace(/^\?/, '');
+  return new URLSearchParams(query).get('staffInvite') === '1';
+}
+
 export const LoginScreen: React.FC = () => {
-  const { authLoading, authError, login, registerRestaurant, resendConfirmationEmail } = useApp();
+  const { authLoading, authError, login, registerRestaurant, registerInvitedStaff, resendConfirmationEmail } = useApp();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [restaurantName, setRestaurantName] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
   const [localSuccess, setLocalSuccess] = useState<string | null>(null);
+  const pendingInviteToken = localStorage.getItem('flux_pending_staff_invite_token');
+  const isStaffInviteFlow = Boolean(pendingInviteToken && isInviteLoginRoute());
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -17,14 +25,22 @@ export const LoginScreen: React.FC = () => {
     setLocalSuccess(null);
     if (!email.trim()) return setLocalError('Informe o email.');
     if (!password) return setLocalError('Informe a senha.');
-    if (mode === 'register' && !restaurantName.trim()) return setLocalError('Informe o nome do restaurante.');
+    if (mode === 'register' && !isStaffInviteFlow && !restaurantName.trim()) return setLocalError('Informe o nome do restaurante.');
 
     try {
       if (mode === 'register') {
+        if (isStaffInviteFlow) {
+          await registerInvitedStaff(email.trim(), password);
+          window.location.hash = '#/accept-invite?token=' + encodeURIComponent(pendingInviteToken ?? '');
+          return;
+        }
         await registerRestaurant(email.trim(), password, restaurantName.trim());
         window.location.hash = '#/onboarding';
       } else {
         await login(email.trim(), password);
+        if (isStaffInviteFlow) {
+          window.location.hash = '#/accept-invite?token=' + encodeURIComponent(pendingInviteToken ?? '');
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : mode === 'register' ? 'Não foi possível criar a conta.' : 'Não foi possível entrar.';
@@ -55,10 +71,10 @@ export const LoginScreen: React.FC = () => {
           </div>
           <div>
             <h1 className="text-sm font-black text-slate-900 uppercase tracking-tight">
-              {mode === 'register' ? 'Criar Restaurante' : 'Acesso Operacional'}
+              {mode === 'register' ? (isStaffInviteFlow ? 'Criar acesso de funcionário' : 'Criar Restaurante') : 'Acesso Operacional'}
             </h1>
             <p className="text-[10px] text-slate-500 font-bold">
-              {mode === 'register' ? 'Comece com o plano Starter.' : 'Entre para administrar o restaurante.'}
+              {mode === 'register' ? (isStaffInviteFlow ? 'Use o mesmo email que recebeu o convite.' : 'Configure sua loja e escolha um plano.') : 'Entre para acessar sua área permitida.'}
             </p>
           </div>
         </div>
@@ -92,7 +108,7 @@ export const LoginScreen: React.FC = () => {
           </div>
         )}
 
-        {mode === 'register' && (
+        {mode === 'register' && !isStaffInviteFlow && (
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-500">Nome do restaurante</label>
             <input
@@ -133,8 +149,14 @@ export const LoginScreen: React.FC = () => {
           className="w-full h-11 rounded-xl bg-slate-950 text-white text-xs font-black uppercase flex items-center justify-center gap-2 disabled:opacity-60"
         >
           {mode === 'register' ? <UserPlus className="w-4 h-4" /> : <LogIn className="w-4 h-4" />}
-          {authLoading ? (mode === 'register' ? 'Criando...' : 'Entrando...') : (mode === 'register' ? 'Criar e Acessar' : 'Entrar')}
+          {authLoading ? (mode === 'register' ? 'Criando...' : 'Entrando...') : (mode === 'register' ? (isStaffInviteFlow ? 'Criar acesso' : 'Criar e acessar') : 'Entrar')}
         </button>
+
+        {isStaffInviteFlow && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[10px] font-bold text-amber-800">
+            Você está aceitando um convite. Se ainda não tem senha, clique em Criar conta e use o email convidado.
+          </div>
+        )}
 
         <button
           type="button"

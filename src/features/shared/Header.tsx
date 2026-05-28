@@ -16,12 +16,12 @@ import {
 import { getStaffUsers } from '../../services/userService';
 
 const ROLE_LABEL_PT: Record<string, string> = {
-  owner: 'Dono (Owner)',
-  manager: 'Gerente (Manager)',
-  kitchen: 'Cozinha (Kitchen)',
-  cashier: 'Caixa (Cashier)',
-  waiter: 'Garçom (Waiter)',
-  customer: 'Cliente (Customer)',
+  owner: 'Dono',
+  manager: 'Gerente',
+  kitchen: 'Cozinha',
+  cashier: 'Caixa',
+  waiter: 'Atendimento',
+  customer: 'Cliente',
 };
 
 const ROLE_COLOR_CLASSES: Record<string, string> = {
@@ -65,6 +65,7 @@ export const Header: React.FC = () => {
   const staffUsers = isAuthenticated ? [currentUser] : getStaffUsers(activeRestaurantId);
   const visibleStaffUsers = isAuthenticated ? [currentUser] : (userLimit < 0 ? staffUsers : staffUsers.slice(0, userLimit));
   const canRemoveBranding = canUseFeature('remove_fluxmenu_branding');
+  const canViewPlanInfo = currentUser.role === 'owner';
 
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -96,7 +97,7 @@ export const Header: React.FC = () => {
                   {restaurantConfig.name}
                 </h1>
                 <span className="px-1 py-0.5 rounded-md bg-red-650 text-[8px] uppercase font-bold text-white tracking-wide border border-red-700 shadow-xs leading-none">
-                  Live POS
+                  Online
                 </span>
               </div>
               {!canRemoveBranding && (
@@ -202,14 +203,18 @@ export const Header: React.FC = () => {
         {/* Operational controls and access profile selector */}
         <div className="flex items-center justify-between md:justify-end gap-3 w-full md:w-auto shrink-0 border-t border-slate-100/40 pt-2 md:pt-0 md:border-t-0">
           
-          <div className="h-6 w-px bg-slate-100 hidden sm:block"></div>
+          {canViewPlanInfo && (
+            <>
+              <div className="h-6 w-px bg-slate-100 hidden sm:block"></div>
 
-          <div className="text-right hidden lg:block select-none">
-            <span className="text-[8px] font-bold text-slate-400 uppercase block tracking-wider leading-none mb-0.5">PLANO</span>
-            <span className="text-xs text-slate-900 font-extrabold uppercase tracking-tight block">{currentPlan.name}</span>
-          </div>
+              <div className="text-right hidden lg:block select-none">
+                <span className="text-[8px] font-bold text-slate-400 uppercase block tracking-wider leading-none mb-0.5">PLANO</span>
+                <span className="text-xs text-slate-900 font-extrabold uppercase tracking-tight block">{currentPlan.name}</span>
+              </div>
 
-          <div className="h-6 w-px bg-slate-100 hidden lg:block"></div>
+              <div className="h-6 w-px bg-slate-100 hidden lg:block"></div>
+            </>
+          )}
 
           <div className="text-right hidden lg:block select-none">
             <span className="text-[8px] font-bold text-slate-400 uppercase block tracking-wider leading-none mb-0.5">UNIDADE</span>
@@ -336,7 +341,7 @@ export const Header: React.FC = () => {
                   })}
                 </div>
 
-                {staffUsers.length > visibleStaffUsers.length && (
+                {canViewPlanInfo && staffUsers.length > visibleStaffUsers.length && (
                   <button
                     onClick={() => showUpgradeNotice('Multiusuários')}
                     className="w-full p-3 bg-amber-50 text-left border-t border-amber-100 hover:bg-amber-100 transition cursor-pointer"
@@ -348,7 +353,7 @@ export const Header: React.FC = () => {
 
                 {/* Dropdown Footer */}
                 <div className="p-3 bg-slate-50 border-t border-slate-100 space-y-2">
-                  <p className="text-[9px] text-slate-400 font-medium text-center">Plano ativo: {currentPlan.name}. As permissões acompanham a assinatura atual.</p>
+                  {canViewPlanInfo && <p className="text-[9px] text-slate-400 font-medium text-center">Plano ativo: {currentPlan.name}. As permissões acompanham a assinatura atual.</p>}
                   <button
                     onClick={() => void logout()}
                     className="w-full h-8 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-red-600 hover:border-red-200 text-[10px] font-black uppercase flex items-center justify-center gap-1.5"

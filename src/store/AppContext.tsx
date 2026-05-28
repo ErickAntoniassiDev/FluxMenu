@@ -20,9 +20,11 @@ interface AppContextType {
   authError: string | null;
   isAuthenticated: boolean;
   hasActiveRestaurant: boolean;
+  refreshAuthContext: () => Promise<void>;
   createRestaurantForCurrentUser: (setup: RestaurantOnboardingSetup) => Promise<OnboardingResult>;
   login: (email: string, password: string) => Promise<void>;
   registerRestaurant: (email: string, password: string, restaurantName: string) => Promise<void>;
+  registerInvitedStaff: (email: string, password: string) => Promise<void>;
   resendConfirmationEmail: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   currentPlan: SaaSPlan;
@@ -157,7 +159,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!supabaseConfigured) localStorage.setItem('flux_current_plan_id', planId);
   };
 
-  const hasBillingEntitlement = !supabaseConfigured || currentSubscription?.status === 'trialing' || currentSubscription?.status === 'active';
+  const hasBillingEntitlement = !supabaseConfigured
+    || currentSubscription?.status === 'trialing'
+    || (currentSubscription?.status === 'active' && currentSubscription.billingStatus === 'active');
   const effectivePlan = hasBillingEntitlement ? currentPlan : PlanService.getPlan(PlanService.getDefaultPlanId());
   const canUseFeature = (feature: SaaSFeature) => FeatureGateService.canUseFeature(effectivePlan, hasBillingEntitlement, feature).allowed;
   const getPlanLimit = (limit: SaaSLimit) => effectivePlan.limits[limit];
@@ -185,6 +189,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return getDefaultUser(activeRestaurantId);
   });
 
+
+  const loadBillingForRestaurant = async (restaurantId: RestaurantId) => {
+    if (!supabaseConfigured || !restaurantId) return;
+    try {
+      const billing = await BillingService.loadBillingStatus(restaurantId);
+      setCurrentSubscription(billing.subscription);
+      setBillingPayments(billing.payments);
+      setBillingCustomer(billing.customer);
+      if (billing.subscription?.planId) setCurrentPlanIdState(billing.subscription.planId);
+    } catch (error) {
+      if (import.meta.env.DEV) console.warn('[FluxMenu billing] initial status load failed.', error);
+    }
+  };
+
   const login = async (email: string, password: string) => {
     setAuthLoading(true);
     setAuthError(null);
@@ -207,6 +225,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setActiveRestaurantIdState(firstMembership.restaurantId);
       setCurrentUserInternal(AuthService.getUserSessionFromMembership(session, firstMembership, firstMembership.restaurantId));
       localStorage.setItem('flux_active_restaurant_id', firstMembership.restaurantId);
+      await loadBillingForRestaurant(firstMembership.restaurantId);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Falha ao autenticar.';
       setAuthError(message);
@@ -216,6 +235,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+
+
+  const registerInvitedStaff = async (email: string, password: string) => {
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const session = await AuthService.registerStaffAccount(email, password);
+      setAuthSession(session);
+      setMemberships([]);
+      setPublicRestaurantAccessId(null);
+      setActiveRestaurantIdState(defaultRestaurantId);
+      setCurrentUserInternal(getDefaultUser(defaultRestaurantId));
+      addToast('Conta criada. Finalize o aceite do convite.', 'success');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Falha ao criar conta.';
+      setAuthError(message);
+      throw error;
+    } finally {
+      setAuthLoading(false);
+    }
+  };
 
   const registerRestaurant = async (email: string, password: string, restaurantName: string) => {
     setAuthLoading(true);
@@ -291,6 +331,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+
+  const refreshAuthContext = async () => {
+    const session = await AuthService.restoreSession();
+    if (!session) throw new Error('Faça login para continuar.');
+    const activeMemberships = await AuthService.getActiveMemberships();
+    setAuthSession(session);
+    setMemberships(activeMemberships);
+    if (activeMemberships.length === 0) return;
+    const firstMembership = activeMemberships[0];
+    setPublicRestaurantAccessId(null);
+    setActiveRestaurantIdState(firstMembership.restaurantId);
+    setCurrentUserInternal(AuthService.getUserSessionFromMembership(session, firstMembership, firstMembership.restaurantId));
+    localStorage.setItem('flux_active_restaurant_id', firstMembership.restaurantId);
+    await loadBillingForRestaurant(firstMembership.restaurantId);
+  };
+
   const resendConfirmationEmail = async (email: string) => {
     setAuthLoading(true);
     setAuthError(null);
@@ -331,13 +387,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return;
       }
 
-      if (!authSession) {
-        resetAuthenticatedRuntimeState();
-        setAuthLoading(false);
-        return;
-      }
-
       try {
+        if (!authSession) {
+          const restoredFromUrl = await AuthService.restoreSession();
+          if (cancelled) return;
+          if (restoredFromUrl) {
+            setAuthSession(restoredFromUrl);
+            return;
+          }
+          resetAuthenticatedRuntimeState();
+          setAuthLoading(false);
+          return;
+        }
+
         const restored = await AuthService.restoreSession();
         if (cancelled) return;
         if (!restored) {
@@ -556,11 +618,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const refreshBilling = async () => {
     if (!authSession || !activeRestaurantId) return;
-    const billing = await BillingService.loadBillingStatus(activeRestaurantId);
-    setCurrentSubscription(billing.subscription);
-    setBillingPayments(billing.payments);
-    setBillingCustomer(billing.customer);
-    if (billing.subscription?.planId && billing.subscription.planId !== currentPlanId) setCurrentPlanIdState(billing.subscription.planId);
+    await loadBillingForRestaurant(activeRestaurantId);
   };
 
   useEffect(() => {
@@ -1071,9 +1129,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       authError,
       isAuthenticated,
       hasActiveRestaurant,
+      refreshAuthContext,
       createRestaurantForCurrentUser,
       login,
       registerRestaurant,
+      registerInvitedStaff,
       resendConfirmationEmail,
       logout,
       currentPlan,

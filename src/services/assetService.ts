@@ -63,7 +63,7 @@ async function compressAssetImage(file: File, kind: 'logo' | 'banner'): Promise<
 }
 
 export async function uploadRestaurantAsset(restaurantId: RestaurantId, kind: 'logo' | 'banner', file: File): Promise<string> {
-  if (!restaurantId) throw new Error('restaurant_id obrigatório.');
+  if (!restaurantId) throw new Error('Restaurante obrigatório para enviar imagem.');
   const blob = await compressAssetImage(file, kind);
   const path = restaurantId + '/' + kind + '.webp';
   return uploadSupabaseStorageObject('restaurant-assets', path, blob, 'image/webp');

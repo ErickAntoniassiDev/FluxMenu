@@ -131,7 +131,7 @@ export const KitchenPanel: React.FC = () => {
             id="kds-priority-select-filter"
           >
             <option value="todos">Todas Prioridades</option>
-            <option value="urgente">⚠️ Urgentes</option>
+            <option value="urgente">Urgentes</option>
             <option value="alta">Alta</option>
             <option value="media">Média</option>
             <option value="baixa">Baixa</option>

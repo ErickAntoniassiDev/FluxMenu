@@ -413,7 +413,7 @@ async function handleCreate(input: BillingRequest): Promise<unknown> {
       externalReference: input.restaurantId + ':' + plan.id
     })
   });
-  const providerStatus = trialDays > 0 ? 'trialing' : toSubscriptionStatus(providerSub.status);
+  const providerStatus = 'past_due';
   const local = await upsertLocalSubscription(input.restaurantId, plan, customerId, providerSub, providerStatus, trialDays);
   logBillingInfo('create completed', {
     action: input.action,

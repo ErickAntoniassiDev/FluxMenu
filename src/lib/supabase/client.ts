@@ -3,6 +3,7 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const isDev = import.meta.env.DEV;
 const authStorageKey = 'flux_supabase_auth_session';
+const legacyAuthStorageKey = authStorageKey;
 
 export type SupabaseAuthSession = {
   accessToken: string;
@@ -42,22 +43,28 @@ function isValidStoredSession(value: unknown): value is SupabaseAuthSession {
 }
 
 function readStoredAuthSession(): SupabaseAuthSession | null {
-  const raw = localStorage.getItem(authStorageKey);
+  const raw = sessionStorage.getItem(authStorageKey) ?? localStorage.getItem(legacyAuthStorageKey);
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as unknown;
-    if (isValidStoredSession(parsed)) return parsed;
+    if (isValidStoredSession(parsed)) {
+      sessionStorage.setItem(authStorageKey, JSON.stringify(parsed));
+      localStorage.removeItem(legacyAuthStorageKey);
+      return parsed;
+    }
   } catch {
     // Invalid local auth cache is cleared below.
   }
-  localStorage.removeItem(authStorageKey);
+  sessionStorage.removeItem(authStorageKey);
+  localStorage.removeItem(legacyAuthStorageKey);
   return null;
 }
 
 function persistAuthSession(session: SupabaseAuthSession | null): void {
   currentAuthSession = session;
-  if (!session) localStorage.removeItem(authStorageKey);
-  else localStorage.setItem(authStorageKey, JSON.stringify(session));
+  localStorage.removeItem(legacyAuthStorageKey);
+  if (!session) sessionStorage.removeItem(authStorageKey);
+  else sessionStorage.setItem(authStorageKey, JSON.stringify(session));
   syncSupabaseRealtimeAuth();
 }
 
@@ -122,6 +129,59 @@ export function getStoredAuthSession(): SupabaseAuthSession | null {
   return currentAuthSession;
 }
 
+function getUrlAuthParams(): URLSearchParams | null {
+  const hash = window.location.hash.replace(/^#/, '');
+  const search = window.location.search.replace(/^\?/, '');
+  const candidates = [hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : hash, search];
+  const raw = candidates.find(candidate => candidate.includes('access_token=') && candidate.includes('refresh_token='));
+  return raw ? new URLSearchParams(raw) : null;
+}
+
+function cleanupAuthParamsFromUrl(): void {
+  const pathname = window.location.pathname;
+  const search = window.location.search;
+  const hash = window.location.hash;
+  if (hash.startsWith('#/accept-invite')) {
+    const route = hash.split('&access_token=')[0].split('?access_token=')[0];
+    window.history.replaceState(null, '', pathname + search + route);
+    return;
+  }
+  if (pathname.includes('/accept-invite')) {
+    window.history.replaceState(null, '', pathname + search);
+  }
+}
+
+async function readUserFromAccessToken(accessToken: string): Promise<{ id: string; email: string }> {
+  const baseUrl = getSupabaseBaseUrl();
+  const response = await fetch(baseUrl + '/auth/v1/user', {
+    headers: {
+      apikey: supabaseAnonKey,
+      Authorization: 'Bearer ' + accessToken
+    }
+  });
+  if (!response.ok) throw new Error('Não foi possível validar o convite.');
+  const user = await response.json() as { id?: string; email?: string };
+  if (!user.id || !user.email) throw new Error('Usuário do convite não encontrado.');
+  return { id: user.id, email: user.email };
+}
+
+export async function consumeAuthSessionFromUrl(): Promise<SupabaseAuthSession | null> {
+  const params = getUrlAuthParams();
+  const accessToken = params?.get('access_token');
+  const refreshToken = params?.get('refresh_token');
+  if (!accessToken || !refreshToken) return null;
+  const expiresIn = Number(params.get('expires_in') ?? 3600);
+  const user = await readUserFromAccessToken(accessToken);
+  const session: SupabaseAuthSession = {
+    accessToken,
+    refreshToken,
+    expiresAt: Date.now() + Math.max(60, expiresIn) * 1000,
+    user
+  };
+  persistAuthSession(session);
+  cleanupAuthParamsFromUrl();
+  return session;
+}
 
 
 export async function resendSignupConfirmation(email: string): Promise<void> {

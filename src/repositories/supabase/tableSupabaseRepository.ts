@@ -36,7 +36,7 @@ function toTable(row: SupabaseRestaurantTableRow): RestaurantTable {
 }
 
 function assertRestaurant(restaurantId: RestaurantId): void {
-  if (!restaurantId) throw new Error('restaurant_id obrigatório.');
+  if (!restaurantId) throw new Error('Restaurante obrigatório para concluir esta ação.');
 }
 
 export async function findAllRestaurantTables(): Promise<RestaurantTablesResult[]> {

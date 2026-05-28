@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useApp } from '../../store/AppContext';
 import { OrderStatus, Product } from '../../types';
 import { getMenuCategories } from '../../services/catalogService';
-import { CheckCircle, Clock, Image as ImageIcon, Instagram, MapPin, PackageCheck, Search, ShoppingCart, Star } from 'lucide-react';
+import { CheckCircle, Clock, Image as ImageIcon, Instagram, LockKeyhole, MapPin, PackageCheck, Search, ShoppingCart, Star, Utensils } from 'lucide-react';
 import { ProductModal } from './ProductModal';
 import { CartSidebar } from './CartSidebar';
 import { AnimatePresence, motion } from 'motion/react';
@@ -35,7 +35,7 @@ const orderStatusLabels: Record<OrderStatus, string> = {
 const orderStatusSteps: OrderStatus[] = ['novo', 'preparo', 'pronto', 'entregue'];
 
 export const ClientMenu: React.FC = () => {
-  const { activeRestaurantId, canUseFeature, products, cart, orders, tableNumber, publicRouteError, restaurantConfig, refreshPublicOrderStatuses } = useApp();
+  const { activeRestaurantId, canUseFeature, hasPermission, products, cart, orders, tableNumber, setTableNumber, tables, publicRouteError, restaurantConfig, refreshPublicOrderStatuses } = useApp();
   const categories = getMenuCategories(activeRestaurantId);
   const canRemoveBranding = canUseFeature('remove_fluxmenu_branding');
 
@@ -76,6 +76,7 @@ export const ClientMenu: React.FC = () => {
         : null;
   const instagramHandle = restaurantConfig.instagram?.replace(/^@/, '').trim();
   const tableLabel = formatTableLabel(tableNumber);
+  const canChooseTable = hasPermission('canOrderForAnyTable');
   const visibleOrders = useMemo(() => {
     return orders
       .filter(order => order.table === tableNumber || order.table === tableLabel)
@@ -160,6 +161,21 @@ export const ClientMenu: React.FC = () => {
             />
           </div>
 
+          {canChooseTable && (
+            <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase text-slate-700">
+              <Utensils className="w-3.5 h-3.5 text-slate-500" />
+              <span className="hidden sm:inline">Mesa</span>
+              <select
+                value={tableNumber}
+                onChange={(event) => setTableNumber(event.target.value)}
+                className="bg-transparent text-xs font-black text-slate-950 outline-hidden cursor-pointer min-w-24"
+                aria-label="Selecionar mesa do atendimento"
+              >
+                {tables.map(table => <option key={table} value={table}>{table}</option>)}
+              </select>
+            </label>
+          )}
+
           <a
             href="#/portal"
             className="px-3 py-2 rounded-xl text-[10px] uppercase font-black tracking-wider border bg-white hover:bg-slate-50 transition flex items-center gap-1.5 cursor-pointer select-none"
@@ -167,7 +183,8 @@ export const ClientMenu: React.FC = () => {
             aria-label="Acessar portal administrativo"
             title="Clique para acessar o Portal Administrativo com perfis operacionais, KDS de Cozinha e Caixa"
           >
-            <span>🔐 Portal</span>
+            <LockKeyhole className="w-3.5 h-3.5" />
+            <span>Portal</span>
           </a>
         </div>
         </div>
@@ -245,7 +262,7 @@ export const ClientMenu: React.FC = () => {
 
         {filteredProducts.length === 0 ? (
           <div className="h-44 flex flex-col items-center justify-center text-center text-slate-400">
-            <span className="text-xl">🍽️</span>
+            <Utensils className="w-5 h-5 text-slate-400" />
             <span className="text-xs font-black tracking-wider uppercase text-slate-800 mt-2 block">Nenhum prato disponível</span>
             <p className="text-[10px] text-slate-500 mt-1">Tente mudar sua pesquisa ou categoria selecionada.</p>
           </div>
@@ -284,11 +301,12 @@ export const ClientMenu: React.FC = () => {
                     
                     {/* Time prep badge overlay */}
                     <div className="absolute top-2.5 right-2.5 px-2 py-0.5 bg-slate-900/75 backdrop-blur-xs rounded text-[9px] font-mono font-bold text-white uppercase tracking-wider flex items-center gap-1">
-                      ⏱️ {product.prepTimeMinutes} min
+                      <Clock className="w-3 h-3" />
+                      {product.prepTimeMinutes} min
                     </div>
 
                     {/* Category tag - Vermelho no Rosa */}
-                    <div className="absolute bottom-2.5 left-2.5 px-1.5 py-0.5 bg-black/60 backdrop-blur-xs rounded-sm text-[8px] font-extrabold text-red-500 uppercase tracking-widest border border-slate-800">
+                    <div className="absolute bottom-2.5 left-2.5 px-2 py-1 bg-white/90 backdrop-blur-xs rounded-md text-[8px] font-extrabold text-slate-900 uppercase tracking-widest border border-white/70 shadow-sm">
                       {product.category}
                     </div>
 

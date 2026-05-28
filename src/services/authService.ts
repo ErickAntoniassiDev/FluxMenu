@@ -1,4 +1,4 @@
-import { getStoredAuthSession, refreshStoredAuthSession, signInWithPassword, signOutFromSupabase, signUpWithPassword, resendSignupConfirmation, SupabaseAuthSession } from '../lib/supabase/client';
+import { consumeAuthSessionFromUrl, getStoredAuthSession, refreshStoredAuthSession, signInWithPassword, signOutFromSupabase, signUpWithPassword, resendSignupConfirmation, SupabaseAuthSession } from '../lib/supabase/client';
 import * as MemberRepository from '../repositories/supabase/memberSupabaseRepository';
 import * as OnboardingRepository from '../repositories/supabase/onboardingSupabaseRepository';
 import { RestaurantId, RestaurantOnboardingSetup, UserSession } from '../types';
@@ -32,7 +32,8 @@ export function getStoredSession(): SupabaseAuthSession | null {
 }
 
 export async function restoreSession(): Promise<SupabaseAuthSession | null> {
-  return refreshStoredAuthSession();
+  const urlSession = await consumeAuthSessionFromUrl();
+  return urlSession ?? refreshStoredAuthSession();
 }
 
 export function getPendingOnboarding(email?: string): PendingOnboarding | null {
@@ -61,6 +62,14 @@ export function clearPendingOnboarding(): void {
 
 export async function resendConfirmationEmail(email: string): Promise<void> {
   await resendSignupConfirmation(normalizeEmail(email));
+}
+
+export async function registerStaffAccount(email: string, password: string): Promise<SupabaseAuthSession> {
+  const session = await signUpWithPassword(normalizeEmail(email), password);
+  if (!session) {
+    throw new Error('Conta criada. Confirme o email e depois entre novamente para aceitar o convite.');
+  }
+  return session;
 }
 
 export async function registerRestaurant(input: RegisterRestaurantInput): Promise<RegisterRestaurantResult> {

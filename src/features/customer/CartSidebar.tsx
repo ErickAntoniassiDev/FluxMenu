@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../store/AppContext';
-import { Image as ImageIcon, X, Trash2, ArrowRight, Table, AlertCircle, Sparkles } from 'lucide-react';
+import { Image as ImageIcon, X, Trash2, ArrowRight, Table, Sparkles, ShoppingCart, Lightbulb } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 
@@ -94,7 +94,7 @@ export const CartSidebar: React.FC<CartSidebarProps> = ({ isOpen, onClose }) => 
                 {cart.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-center p-6 select-none">
                     <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center border border-slate-150 text-slate-400 mb-4 animate-pulse">
-                      🛒
+                      <ShoppingCart className="w-7 h-7" />
                     </div>
                     <span className="font-display font-extrabold text-xs text-slate-800 uppercase tracking-wider block">Carrinho Vazio</span>
                     <p className="text-[10px] text-slate-500 max-w-[220px] leading-relaxed mt-1 font-semibold">
@@ -140,7 +140,7 @@ export const CartSidebar: React.FC<CartSidebarProps> = ({ isOpen, onClose }) => 
                                   ? 'bg-red-50 text-red-700 font-black border border-red-200'
                                   : 'bg-slate-55 text-slate-505 border'
                               }`}>
-                                💡 {item.observation}
+                                <Lightbulb className="inline w-3 h-3 mr-1 align-[-2px]" />{item.observation}
                               </span>
                             )}
                           </div>
@@ -192,7 +192,7 @@ export const CartSidebar: React.FC<CartSidebarProps> = ({ isOpen, onClose }) => 
                     </div>
                     <div className="flex justify-between text-xs font-semibold text-slate-500">
                       <span>Taxa de Serviço</span>
-                      <span className="font-mono text-emerald-600 font-bold">Grátis (SaaS)</span>
+                      <span className="font-mono text-emerald-600 font-bold">Sem taxa</span>
                     </div>
                     <div className="h-px bg-slate-200 my-1"></div>
                     <div className="flex justify-between text-xs font-black text-slate-950">
@@ -227,7 +227,7 @@ export const CartSidebar: React.FC<CartSidebarProps> = ({ isOpen, onClose }) => 
                   </button>
 
                   <p className="text-[9px] text-center text-slate-400 font-extrabold uppercase tracking-wider mt-3">
-                    Isso atualiza o fluxo operacional da cozinha.
+                    Seu pedido aparecerá para a equipe da cozinha.
                   </p>
                 </div>
               )}

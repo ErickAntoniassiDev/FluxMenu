@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Order, OrderStatus } from '../../types';
 import { useApp } from '../../store/AppContext';
-import { ChevronRight, CheckCircle, Trash2, ShieldAlert, Clock, AlertOctagon } from 'lucide-react';
+import { ChevronRight, CheckCircle, Trash2, ShieldAlert, Clock, AlertOctagon, Lightbulb } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface KitchenOrderCardProps {
@@ -140,7 +140,7 @@ export const KitchenOrderCard: React.FC<KitchenOrderCardProps> = ({ order, curre
                         : 'bg-slate-100 text-slate-600 font-bold'
                     }`}>
                       {hasAllergyWarning && <ShieldAlert className="w-3 h-3 text-white shrink-0" />}
-                      💡 {item.observation}
+                      <Lightbulb className="w-3 h-3 shrink-0" /> {item.observation}
                     </span>
                   )}
                 </div>

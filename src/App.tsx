@@ -14,6 +14,7 @@ const AdminPanel = lazy(() => import('./features/admin/AdminPanel').then(module 
 const CashierPanel = lazy(() => import('./features/cashier/CashierPanel').then(module => ({ default: module.CashierPanel })));
 const LoginScreen = lazy(() => import('./features/shared/LoginScreen').then(module => ({ default: module.LoginScreen })));
 const OnboardingScreen = lazy(() => import('./features/shared/OnboardingScreen').then(module => ({ default: module.OnboardingScreen })));
+const AcceptInviteScreen = lazy(() => import('./features/shared/AcceptInviteScreen').then(module => ({ default: module.AcceptInviteScreen })));
 
 const ScreenLoading: React.FC<{ label?: string }> = ({ label = 'Carregando...' }) => (
   <div className="h-full w-full flex items-center justify-center bg-slate-50 text-xs font-black text-slate-500 uppercase" role="status" aria-live="polite">
@@ -175,6 +176,14 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     if (path === '/portal') navigate(getDefaultRouteForMode(activeMode === 'client' ? 'admin' : activeMode), { replace: true });
   }, [activeMode, navigate, path]);
+
+  const browserPath = window.location.pathname;
+  const browserHash = window.location.hash;
+  const isAcceptInviteRoute = path === '/accept-invite' || browserPath === '/accept-invite' || browserHash.startsWith('#/accept-invite');
+
+  if (isAcceptInviteRoute) {
+    return <div className="h-screen w-screen bg-slate-50 font-sans"><Suspense fallback={<ScreenLoading />}><AcceptInviteScreen /></Suspense><ToastContainer /></div>;
+  }
 
   if (path === '/' || path === '') {
     return (

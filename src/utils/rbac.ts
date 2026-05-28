@@ -49,7 +49,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionConfig> = {
     canProcessCheckout: false,
     canUpdateKDS: false,
     canCreateManualOrders: true,
-    canOrderForAnyTable: false,
+    canOrderForAnyTable: true,
   },
   customer: {
     allowedModes: ['client'],

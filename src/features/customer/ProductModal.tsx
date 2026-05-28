@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Product } from '../../types';
 import { useApp } from '../../store/AppContext';
-import { Image as ImageIcon, X, Plus, Minus, AlertTriangle } from 'lucide-react';
+import { Image as ImageIcon, X, Plus, Minus, AlertTriangle, Clock } from 'lucide-react';
 import { motion } from 'motion/react';
 
 
@@ -93,7 +93,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, onClose }) 
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent" />
             <div className="absolute bottom-4 left-4 right-4 text-white">
-              <span className="px-2 py-0.5 rounded-sm bg-red-650 text-[9px] font-extrabold uppercase tracking-widest leading-none block w-max mb-1.5 shadow-sm border border-red-750">
+              <span className="px-2 py-1 rounded-md bg-white/90 text-[9px] font-extrabold uppercase tracking-widest leading-none block w-max mb-1.5 shadow-sm border border-white/70 text-slate-900">
                 {product.category}
               </span>
               <h3 className="text-xl font-display font-extrabold leading-none tracking-tight">
@@ -110,10 +110,9 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, onClose }) 
               </p>
               <div className="flex items-center gap-3 mt-3.5 text-[11px] font-semibold text-slate-400 font-mono">
                 <span className="flex items-center gap-1">
-                  ⏱️ Prep: {product.prepTimeMinutes} min
+                  <Clock className="w-3.5 h-3.5" />
+                  Preparo: {product.prepTimeMinutes} min
                 </span>
-                <span>•</span>
-                <span>ID: {product.id}</span>
               </div>
             </div>
 
@@ -176,7 +175,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({ product, onClose }) 
                     className="w-full p-2.5 rounded-md border border-red-250 bg-white text-xs font-black placeholder-red-400 text-red-950 focus:border-red-600 focus:ring-red-600/20 outline-hidden"
                   />
                   <span className="text-[9px] font-black text-red-605 uppercase block mt-1.5 animate-pulse">
-                    🚨 ISSO DEIXARÁ O PEDIDO EM ALTA PRIORIDADE NA COZINHA!
+                    Este aviso deixa o pedido em alta prioridade na cozinha.
                   </span>
                 </div>
               )}

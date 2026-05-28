@@ -34,7 +34,8 @@ export const CashierPanel: React.FC = () => {
     checkoutTable,
     paymentLogs,
     clearPaymentHistory,
-    addToast
+    addToast,
+    restaurantConfig
   } = useApp();
 
   const canUseAnalytics = canUseFeature('analytics');
@@ -1028,9 +1029,9 @@ export const CashierPanel: React.FC = () => {
                   {/* Merchant information */}
                   <div className="text-center flex flex-col items-center gap-1 text-[11px] font-extrabold border-b border-dashed border-slate-300 pb-4">
                     <Receipt className="w-6 h-6 text-slate-900" />
-                    <span className="text-xs font-black uppercase text-slate-900">Gusto & Charcoal</span>
-                    <span className="font-normal text-[9px] text-slate-500">FluxMenu POS Engine</span>
-                    <span className="font-normal text-[9px] text-slate-500">Lorena, 1420 - Jardins, SP</span>
+                    <span className="text-xs font-black uppercase text-slate-900">{restaurantConfig.name}</span>
+                    <span className="font-normal text-[9px] text-slate-500">Comprovante de mesa</span>
+                    <span className="font-normal text-[9px] text-slate-500">{restaurantConfig.address || 'Endereço não informado'}</span>
                   </div>
 
                   {/* Operational context */}

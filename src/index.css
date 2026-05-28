@@ -19,6 +19,9 @@
   --color-slate-750: #1e293b;
   --color-slate-855: #1e293b;
   --color-slate-905: #0f172a;
+  --color-slate-800: #1f1f1f;
+  --color-slate-900: #111111;
+  --color-slate-950: #050505;
   --color-red-250: #fecaca;
   --color-red-550: #ef4444;
   --color-red-605: #dc2626;
@@ -66,6 +69,18 @@
 
   label {
     color: inherit;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  a[href],
+  summary {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
   }
 }
 
@@ -140,6 +155,7 @@
   html,
   body,
   #root {
+    width: 100%;
     min-height: 100%;
   }
 
@@ -158,7 +174,13 @@
 }
 
 .h-screen {
+  min-height: 100vh;
   height: 100dvh;
+}
+
+.w-screen {
+  width: 100vw;
+  max-width: 100%;
 }
 
 @media (prefers-reduced-motion: reduce) {

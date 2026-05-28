@@ -52,6 +52,53 @@ function toSlug(value: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
+const roleLabels: Record<UserRole, string> = {
+  owner: 'Dono',
+  manager: 'Gerente',
+  kitchen: 'Cozinha',
+  cashier: 'Caixa',
+  waiter: 'Atendimento',
+  customer: 'Cliente'
+};
+
+const invitationStatusLabels: Record<string, string> = {
+  pending: 'Pendente',
+  accepted: 'Aceito',
+  revoked: 'Revogado'
+};
+
+const subscriptionStatusLabels: Record<string, string> = {
+  trialing: 'Período gratuito',
+  active: 'Ativa',
+  past_due: 'Aguardando pagamento',
+  canceled: 'Cancelada',
+  incomplete: 'Pendente'
+};
+
+const paymentStatusLabels: Record<string, string> = {
+  PENDING: 'Pendente',
+  RECEIVED: 'Recebida',
+  CONFIRMED: 'Confirmada',
+  OVERDUE: 'Vencida',
+  REFUNDED: 'Estornada',
+  DELETED: 'Cancelada'
+};
+
+function statusLabel(status?: string | null): string {
+  if (!status) return 'Sem assinatura';
+  return subscriptionStatusLabels[status] ?? status;
+}
+
+function paymentStatusLabel(status?: string | null): string {
+  if (!status) return '-';
+  return paymentStatusLabels[status] ?? status;
+}
+
+function friendlyPaymentCode(value?: string | null): string {
+  if (!value) return 'Cobrança';
+  return 'Cobrança ' + value.slice(-8).toUpperCase();
+}
+
 export const AdminPanel: React.FC = () => {
   const {
     activeRestaurantId,
@@ -124,6 +171,8 @@ export const AdminPanel: React.FC = () => {
   const [staffInvitations, setStaffInvitations] = useState<StaffService.StaffInvitation[]>([]);
   const [staffLoading, setStaffLoading] = useState(false);
   const [staffError, setStaffError] = useState<string | null>(null);
+  const [staffSuccess, setStaffSuccess] = useState<string | null>(null);
+  const [staffInviteLink, setStaffInviteLink] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<UserRole>('waiter');
   const [settingsDraft, setSettingsDraft] = useState<RestaurantConfig>(restaurantConfig);
@@ -137,6 +186,7 @@ export const AdminPanel: React.FC = () => {
   const canManageRestaurant = hasPermission('canConfigureRestaurant');
   const canManageTables = hasPermission('canManageTables');
   const canManageStaff = currentUser.role === 'owner' || currentUser.role === 'manager';
+  const canViewBilling = currentUser.role === 'owner';
   const activeStaffCount = staffMembers.filter(member => member.active).length;
   const staffLimitDecision = checkLimit('maxStaffUsers', activeStaffCount, 1);
   const canInviteStaff = canManageStaff && canUseFeature('multi_user_rbac') && staffLimitDecision.allowed;
@@ -214,6 +264,10 @@ export const AdminPanel: React.FC = () => {
     setSettingsDraft(restaurantConfig);
   }, [restaurantConfig]);
 
+  useEffect(() => {
+    if (!canViewBilling && activeTab === 'subscription') setActiveTab('dashboard');
+  }, [activeTab, canViewBilling]);
+
   const reloadTables = async () => {
     try {
       const records = await TableService.getTableRecordsForRestaurant(activeRestaurantId);
@@ -227,6 +281,8 @@ export const AdminPanel: React.FC = () => {
     if (!canManageStaff) return;
     setStaffLoading(true);
     setStaffError(null);
+    setStaffSuccess(null);
+    setStaffInviteLink(null);
     try {
       const [members, invitations] = await Promise.all([
         StaffService.loadStaff(activeRestaurantId),
@@ -490,10 +546,13 @@ export const AdminPanel: React.FC = () => {
     if (!staffLimitDecision.allowed) return setStaffError(staffLimitDecision.message ?? 'Limite de usuários atingido para o plano atual.');
     setStaffLoading(true);
     try {
-      await StaffService.inviteStaff(activeRestaurantId, inviteEmail, inviteRole, currentUser.role);
+      const result = await StaffService.inviteStaff(activeRestaurantId, inviteEmail, inviteRole, currentUser.role, currentUser.email);
+      const manualLink = result.manualLink ?? null;
       setInviteEmail('');
       setInviteRole('waiter');
       await reloadStaff();
+      setStaffSuccess(result.message);
+      setStaffInviteLink(manualLink);
     } catch (error) {
       setStaffError(error instanceof Error ? error.message : 'Não foi possível convidar funcionário.');
     } finally {
@@ -502,7 +561,7 @@ export const AdminPanel: React.FC = () => {
   };
 
   const handleStaffRoleChange = async (member: StaffService.StaffMember, role: UserRole) => {
-    if (member.role === 'owner') return setStaffError('Owner não pode ser alterado por esta tela.');
+    if (member.role === 'owner') return setStaffError('O dono da conta não pode ser alterado por esta tela.');
     setStaffLoading(true);
     setStaffError(null);
     try {
@@ -516,7 +575,7 @@ export const AdminPanel: React.FC = () => {
   };
 
   const handleStaffActiveChange = async (member: StaffService.StaffMember, active: boolean) => {
-    if (member.role === 'owner') return setStaffError('Owner não pode ser desativado por esta tela.');
+    if (member.role === 'owner') return setStaffError('O dono da conta não pode ser desativado por esta tela.');
     setStaffLoading(true);
     setStaffError(null);
     try {
@@ -524,6 +583,23 @@ export const AdminPanel: React.FC = () => {
       await reloadStaff();
     } catch (error) {
       setStaffError(error instanceof Error ? error.message : 'Não foi possível atualizar funcionário.');
+    } finally {
+      setStaffLoading(false);
+    }
+  };
+
+  const handleStaffRemove = async (member: StaffService.StaffMember) => {
+    if (member.role === 'owner') return setStaffError('O dono da conta não pode ser removido por esta tela.');
+    const confirmed = window.confirm('Remover este funcionário da loja? Ele perderá o acesso imediatamente.');
+    if (!confirmed) return;
+    setStaffLoading(true);
+    setStaffError(null);
+    try {
+      await StaffService.removeStaffMember(activeRestaurantId, member, currentUser.role);
+      await reloadStaff();
+      setStaffSuccess('Funcionário removido da loja.');
+    } catch (error) {
+      setStaffError(error instanceof Error ? error.message : 'Não foi possível remover funcionário.');
     } finally {
       setStaffLoading(false);
     }
@@ -578,7 +654,7 @@ export const AdminPanel: React.FC = () => {
   };
 
 
-  const billingRoleAllowed = currentUser.role === 'owner' || currentUser.role === 'manager';
+  const billingRoleAllowed = canViewBilling;
   const normalizedBillingCpfCnpj = billingCpfCnpj.replace(/\D/g, '');
 
   const requireBillingCpfCnpj = (): string | null => {
@@ -645,10 +721,14 @@ export const AdminPanel: React.FC = () => {
               </div>
             </div>
           </div>
-        ) : (
-          <button onClick={() => showUpgradeNotice('Analytics')} className="w-full md:w-auto text-left">
+        ) : canViewBilling ? (
+          <button onClick={() => showUpgradeNotice('Analytics')} className="w-full md:w-auto text-left cursor-pointer">
             <UpgradeNotice title="Analytics bloqueado" description="Métricas e relatórios estão disponíveis a partir do plano Pro." />
           </button>
+        ) : (
+          <div className="w-full md:w-auto">
+            <UpgradeNotice title="Analytics indisponível" description="Métricas avançadas dependem do plano contratado pelo dono da conta." />
+          </div>
         )}
       </div>
 
@@ -706,18 +786,20 @@ export const AdminPanel: React.FC = () => {
           Equipe
         </button>
 
-        <button
-          onClick={() => setActiveTab('subscription')}
-          className={`py-4 text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 relative border-b-2 cursor-pointer select-none ${
-            activeTab === 'subscription'
-              ? 'border-red-600 text-red-650'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-          id="admin-tab-subscription"
-        >
-          <CreditCard className="w-3.5 h-3.5" />
-          Assinatura
-        </button>
+        {canViewBilling && (
+          <button
+            onClick={() => setActiveTab('subscription')}
+            className={`py-4 text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 relative border-b-2 cursor-pointer select-none ${
+              activeTab === 'subscription'
+                ? 'border-red-600 text-red-650'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+            id="admin-tab-subscription"
+          >
+            <CreditCard className="w-3.5 h-3.5" />
+            Assinatura
+          </button>
+        )}
 
         <button
           onClick={() => setActiveTab('settings')}
@@ -740,9 +822,15 @@ export const AdminPanel: React.FC = () => {
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
             {!canUseAnalytics ? (
-              <button onClick={() => showUpgradeNotice('Analytics')} className="w-full text-left">
-                <UpgradeNotice title="Analytics bloqueado" description="Dashboard operacional e vendas reais estão disponíveis a partir do plano Pro." />
-              </button>
+              canViewBilling ? (
+                <button onClick={() => showUpgradeNotice('Analytics')} className="w-full text-left cursor-pointer">
+                  <UpgradeNotice title="Analytics bloqueado" description="Dashboard operacional e vendas reais estão disponíveis a partir do plano Pro." />
+                </button>
+              ) : (
+                <div className="w-full">
+                  <UpgradeNotice title="Analytics indisponível" description="Dashboard financeiro depende do plano contratado pelo dono da conta." />
+                </div>
+              )
             ) : currentUser.role === 'kitchen' ? (
               <div className="bg-white border border-slate-200 rounded-xl p-6 text-xs font-bold text-slate-500">
                 Seu perfil não possui acesso a dados financeiros.
@@ -752,7 +840,7 @@ export const AdminPanel: React.FC = () => {
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200/65">
                   <div>
                     <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-tight">Operação e Vendas</h3>
-                    <p className="text-[10px] text-slate-500 mt-0.5">Dados reais do Supabase filtrados por restaurante ativo.</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Dados do restaurante ativo, com acesso isolado por perfil.</p>
                   </div>
                   <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-1">
                     {[
@@ -888,7 +976,7 @@ export const AdminPanel: React.FC = () => {
               <div className="flex flex-col md:flex-row md:items-end gap-3 justify-between">
                 <div>
                   <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-tight">Categorias</h3>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Gerencie grupos do cardápio salvos no Supabase.</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Organize os grupos que aparecem no cardápio.</p>
                 </div>
                 <form onSubmit={handleAddCategorySubmit} className="flex gap-2 w-full md:w-auto">
                   <input
@@ -994,7 +1082,7 @@ export const AdminPanel: React.FC = () => {
                         </td>
 
                         <td className="p-4 font-mono font-bold text-slate-600">
-                          ⏱️ {prod.prepTimeMinutes} min
+                          <span className="inline-flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{prod.prepTimeMinutes} min</span>
                         </td>
 
                         <td className="p-4">
@@ -1056,7 +1144,7 @@ export const AdminPanel: React.FC = () => {
             <div className="bg-white rounded-xl border border-slate-200/70 p-5 space-y-4 lg:col-span-1">
               <div>
                 <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">Mesas</h4>
-                <p className="text-[10px] text-slate-400 mt-0.5">CRUD salvo em restaurant_tables com restaurant_id ativo.</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">Crie e organize as mesas usadas nos QR Codes.</p>
               </div>
 
               {adminError && <div className="p-3 rounded-xl border border-red-200 bg-red-50 text-red-700 text-xs font-bold">{adminError}</div>}
@@ -1170,20 +1258,22 @@ export const AdminPanel: React.FC = () => {
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                 <div>
                   <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">Funcionários e Permissões</h4>
-                  <p className="text-[10px] text-slate-400 mt-0.5">Equipe carregada de restaurant_members, sempre filtrada por restaurant_id.</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Controle quem acessa cozinha, caixa, atendimento e gestão.</p>
                 </div>
                 {staffLoading && <span className="text-[10px] font-black uppercase text-slate-400">Carregando...</span>}
               </div>
 
               {!canManageStaff && <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">Seu perfil não pode gerenciar funcionários.</div>}
-              {!canUseFeature('multi_user_rbac') && canManageStaff && <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">Gestão de equipe está disponível a partir do plano Pro.</div>}
-              {canUseFeature('multi_user_rbac') && canManageStaff && !staffLimitDecision.allowed && <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">{staffLimitDecision.message}</div>}
+              {!canUseFeature('multi_user_rbac') && canManageStaff && <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">{canViewBilling ? 'Gestão de equipe está disponível a partir do plano Pro.' : 'Gestão de equipe depende do plano contratado pelo dono da conta.'}</div>}
+              {canUseFeature('multi_user_rbac') && canManageStaff && !staffLimitDecision.allowed && <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-800">{canViewBilling ? staffLimitDecision.message : 'Limite de funcionários atingido. Peça ao dono da conta para revisar o plano.'}</div>}
               {staffError && <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold">{staffError}</div>}
+              {staffSuccess && <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold">{staffSuccess}</div>}
+              {staffInviteLink && <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold space-y-2"><p>Link do convite. Envie manualmente se o email não chegar em alguns minutos:</p><a href={staffInviteLink} target="_blank" rel="noopener noreferrer" className="block break-all rounded-lg bg-white border border-amber-200 p-2 text-[10px] text-slate-800 underline">{staffInviteLink}</a></div>}
 
               <form onSubmit={handleInviteStaff} className="grid grid-cols-1 md:grid-cols-[1fr_180px_auto] gap-2">
                 <input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} type="email" placeholder="email@restaurante.com" disabled={!canInviteStaff || staffLoading} className="p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 font-semibold bg-slate-50 disabled:opacity-60" />
                 <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as UserRole)} disabled={!canInviteStaff || staffLoading} className="p-2.5 border border-slate-200 rounded-lg text-xs font-bold bg-white disabled:opacity-60">
-                  {assignableRoles.map(role => <option key={role} value={role}>{role}</option>)}
+                  {assignableRoles.map(role => <option key={role} value={role}>{roleLabels[role]}</option>)}
                 </select>
                 <button type="submit" disabled={!canInviteStaff || staffLoading || assignableRoles.length === 0} className="h-10 px-4 rounded-lg bg-slate-950 text-white text-xs font-black uppercase flex items-center justify-center gap-2 disabled:opacity-60">
                   <UserPlus className="w-3.5 h-3.5" /> Convidar
@@ -1202,17 +1292,24 @@ export const AdminPanel: React.FC = () => {
                       <tr key={member.id}>
                         <td className="p-4"><span className="font-black text-slate-900 block">{member.name}</span><span className="text-[10px] text-slate-400 font-bold">{member.email || member.profileId}</span></td>
                         <td className="p-4">
-                          {member.role === 'owner' ? <span className="font-black uppercase text-red-650">owner</span> : (
+                          {member.role === 'owner' ? <span className="font-black uppercase text-red-650">Dono</span> : (
                             <select value={member.role} onChange={(e) => void handleStaffRoleChange(member, e.target.value as UserRole)} disabled={!canManageStaff || staffLoading || !assignableRoles.includes(member.role)} className="p-2 border border-slate-200 rounded-lg text-xs font-bold disabled:opacity-60">
-                              {assignableRoles.map(role => <option key={role} value={role}>{role}</option>)}
+                              {assignableRoles.map(role => <option key={role} value={role}>{roleLabels[role]}</option>)}
                             </select>
                           )}
                         </td>
                         <td className="p-4"><span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase ${member.active ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'}`}>{member.active ? 'ativo' : 'inativo'}</span></td>
                         <td className="p-4 text-right">
-                          <button onClick={() => void handleStaffActiveChange(member, !member.active)} disabled={!canManageStaff || member.role === 'owner' || (currentUser.role === 'manager' && member.role === 'manager') || staffLoading} className="px-3 py-1.5 rounded-lg border border-slate-200 text-[10px] font-black uppercase text-slate-600 hover:text-red-600 disabled:opacity-40">
-                            <Power className="w-3.5 h-3.5 inline mr-1" /> {member.active ? 'Desativar' : 'Ativar'}
-                          </button>
+                          <div className="flex justify-end gap-2">
+                            <button onClick={() => void handleStaffActiveChange(member, !member.active)} disabled={!canManageStaff || member.role === 'owner' || (currentUser.role === 'manager' && member.role === 'manager') || staffLoading} className="px-3 py-1.5 rounded-lg border border-slate-200 text-[10px] font-black uppercase text-slate-600 hover:text-red-600 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed">
+                              <Power className="w-3.5 h-3.5 inline mr-1" /> {member.active ? 'Desativar' : 'Ativar'}
+                            </button>
+                            {member.role !== 'owner' && (
+                              <button onClick={() => void handleStaffRemove(member)} disabled={!canManageStaff || (currentUser.role === 'manager' && member.role === 'manager') || staffLoading} className="px-3 py-1.5 rounded-lg border border-red-200 text-[10px] font-black uppercase text-red-700 hover:bg-red-50 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed">
+                                Remover
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1226,10 +1323,18 @@ export const AdminPanel: React.FC = () => {
               <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">Convites</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                 {staffInvitations.map(invitation => (
-                  <div key={invitation.id} className="border border-slate-200 rounded-xl p-3">
-                    <span className="text-xs font-black text-slate-900 block truncate">{invitation.email}</span>
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">{invitation.role} • {invitation.status}</span>
-                    {invitation.status === 'pending' && <button onClick={() => void StaffService.revokeInvitation(activeRestaurantId, invitation.id).then(reloadStaff).catch(error => setStaffError(error instanceof Error ? error.message : 'Não foi possível revogar convite.'))} className="mt-2 text-[10px] font-black uppercase text-red-600">Revogar</button>}
+                  <div key={invitation.id} className="border border-slate-200 rounded-xl p-3 bg-white shadow-xs flex flex-col gap-3">
+                    <div className="min-w-0">
+                      <span className="text-xs font-black text-slate-900 block truncate">{invitation.email}</span>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        <span className="px-2 py-1 rounded-lg bg-slate-100 text-slate-700 text-[9px] font-black uppercase">{roleLabels[invitation.role]}</span>
+                        <span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase ${invitation.status === 'pending' ? 'bg-amber-50 text-amber-800 border border-amber-200' : invitation.status === 'accepted' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}>{invitationStatusLabels[invitation.status] ?? invitation.status}</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {invitation.status === 'pending' && <button onClick={() => void StaffService.revokeInvitation(activeRestaurantId, invitation.id).then(reloadStaff).catch(error => setStaffError(error instanceof Error ? error.message : 'Não foi possível revogar convite.'))} className="h-8 w-max rounded-lg border border-red-200 px-3 text-[10px] font-black uppercase text-red-650 hover:bg-red-50 cursor-pointer">Revogar convite</button>}
+                      {invitation.status !== 'pending' && <button onClick={() => void StaffService.clearInvitation(activeRestaurantId, invitation.id).then(reloadStaff).catch(error => setStaffError(error instanceof Error ? error.message : 'Não foi possível limpar convite.'))} className="h-8 w-max rounded-lg border border-slate-200 px-3 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50 cursor-pointer">Limpar</button>}
+                    </div>
                   </div>
                 ))}
                 {staffInvitations.length === 0 && <p className="text-xs text-slate-400 font-bold">Nenhum convite criado.</p>}
@@ -1239,26 +1344,25 @@ export const AdminPanel: React.FC = () => {
         )}
 
         {/* TAB 5: ASSINATURA */}
-        {activeTab === 'subscription' && (
+        {canViewBilling && activeTab === 'subscription' && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
               <div className="bg-white rounded-xl border border-slate-200/70 p-5 xl:col-span-2">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                   <div>
-                    <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">Assinatura SaaS Asaas</h4>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Plano e cobrança vêm do Supabase atualizado por Edge Functions e webhooks.</p>
+                    <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">Assinatura</h4>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Acompanhe plano, pagamento e histórico de cobranças.</p>
                   </div>
                   <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase ${currentSubscription?.status === 'past_due' ? 'bg-red-600 text-white' : currentSubscription?.status === 'canceled' ? 'bg-slate-200 text-slate-600' : 'bg-emerald-600 text-white'}`}>
-                    {currentSubscription?.status ?? 'sem assinatura'}
+                    {statusLabel(currentSubscription?.status)}
                   </span>
                 </div>
 
                 {billingError && <div className="mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold">{billingError}</div>}
-                {!billingRoleAllowed && <div className="mt-4 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">Apenas owner ou manager pode alterar cobrança.</div>}
-                {currentSubscription?.status === 'past_due' && <div className="mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold">Assinatura inadimplente: recursos pagos ficam bloqueados até confirmação do pagamento pelo webhook.</div>}
+                {currentSubscription?.status === 'past_due' && <div className="mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold">Pagamento pendente: o painel fica bloqueado até a confirmação automática.</div>}
 
                 <div className="mt-5 bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
-                  <label className="text-xs font-bold text-slate-500">CPF/CNPJ do cliente Asaas</label>
+                  <label className="text-xs font-bold text-slate-500">CPF/CNPJ para cobrança</label>
                   <input
                     value={billingCpfCnpj}
                     onChange={(e) => setBillingCpfCnpj(e.target.value)}
@@ -1266,7 +1370,7 @@ export const AdminPanel: React.FC = () => {
                     disabled={!billingRoleAllowed || billingLoading !== null}
                     className="w-full p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 font-bold text-slate-800 disabled:opacity-60"
                   />
-                  <p className="text-[10px] text-slate-500 font-bold">{billingCustomer.hasCpfCnpj ? 'Documento fiscal salvo: ' + (billingCustomer.cpfCnpjMasked ?? 'cadastrado') + '. Preencha novamente apenas se quiser atualizar.' : 'Obrigatório para criar cobrança no Asaas Sandbox.'}</p>
+                  <p className="text-[10px] text-slate-500 font-bold">{billingCustomer.hasCpfCnpj ? 'Documento fiscal salvo: ' + (billingCustomer.cpfCnpjMasked ?? 'cadastrado') + '. Preencha novamente apenas se quiser atualizar.' : 'Obrigatório para criar cobrança.'}</p>
                 </div>
 
                 <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1293,7 +1397,7 @@ export const AdminPanel: React.FC = () => {
                 <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">Status</h4>
                 <div className="space-y-2 text-xs">
                   <div className="flex justify-between border-b border-slate-100 pb-2"><span className="font-bold text-slate-500">Plano</span><span className="font-black text-slate-900">{currentPlan.name}</span></div>
-                  <div className="flex justify-between border-b border-slate-100 pb-2"><span className="font-bold text-slate-500">Trial até</span><span className="font-black text-slate-900">{currentSubscription?.trialEndsAt?.slice(0, 10) ?? '-'}</span></div>
+                  {currentSubscription?.status === 'trialing' && <div className="flex justify-between border-b border-slate-100 pb-2"><span className="font-bold text-slate-500">Período grátis até</span><span className="font-black text-slate-900">{currentSubscription?.trialEndsAt?.slice(0, 10) ?? '-'}</span></div>}
                   <div className="flex justify-between border-b border-slate-100 pb-2"><span className="font-bold text-slate-500">Próximo vencimento</span><span className="font-black text-slate-900">{currentSubscription?.currentPeriodEnd?.slice(0, 10) ?? '-'}</span></div>
                 </div>
                 {currentSubscription?.checkoutUrl && <a href={currentSubscription.checkoutUrl} target="_blank" rel="noopener noreferrer" className="block h-9 rounded-lg bg-emerald-600 text-white text-[10px] font-black uppercase text-center leading-9">Abrir cobrança</a>}
@@ -1309,7 +1413,7 @@ export const AdminPanel: React.FC = () => {
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 border-b border-slate-150 text-slate-500 font-bold uppercase text-[9px] tracking-wider"><tr><th className="p-4">Cobrança</th><th className="p-4">Status</th><th className="p-4">Valor</th><th className="p-4">Vencimento</th><th className="p-4 text-right">Link</th></tr></thead>
                   <tbody className="divide-y divide-slate-100">
-                    {billingPayments.map(payment => <tr key={payment.id}><td className="p-4 font-mono font-bold text-slate-700">{payment.providerPaymentId ?? payment.id}</td><td className="p-4 font-black uppercase">{payment.status}</td><td className="p-4 font-mono font-black">{payment.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td><td className="p-4 font-bold text-slate-500">{payment.dueDate ?? '-'}</td><td className="p-4 text-right">{payment.invoiceUrl ? <a href={payment.invoiceUrl} target="_blank" rel="noopener noreferrer" className="text-red-600 font-black uppercase text-[10px]">Abrir</a> : '-'}</td></tr>)}
+                    {billingPayments.map(payment => <tr key={payment.id}><td className="p-4 font-bold text-slate-700">{friendlyPaymentCode(payment.providerPaymentId ?? payment.id)}</td><td className="p-4 font-black uppercase">{paymentStatusLabel(payment.status)}</td><td className="p-4 font-mono font-black">{payment.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td><td className="p-4 font-bold text-slate-500">{payment.dueDate ?? '-'}</td><td className="p-4 text-right">{payment.invoiceUrl ? <a href={payment.invoiceUrl} target="_blank" rel="noopener noreferrer" className="text-red-600 font-black uppercase text-[10px]">Abrir</a> : '-'}</td></tr>)}
                     {billingPayments.length === 0 && <tr><td colSpan={5} className="p-6 text-center text-xs text-slate-400 font-bold">Nenhuma cobrança recebida ainda.</td></tr>}
                   </tbody>
                 </table>
@@ -1324,7 +1428,7 @@ export const AdminPanel: React.FC = () => {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
               <div>
                 <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">Configurações Gerais da Loja</h4>
-                <p className="text-[10px] text-slate-400 mt-0.5">Identidade, contato, imagens, cores e horários salvos no Supabase.</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">Identidade, contato, imagens, cores e horários do cardápio público.</p>
               </div>
               <button onClick={() => void handleSaveSettings()} disabled={!canManageRestaurant || settingsLoading !== null} className="h-10 px-4 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-xs font-black uppercase flex items-center justify-center gap-2">
                 <Save className="w-3.5 h-3.5" /> {settingsLoading === 'settings' ? 'Salvando...' : 'Salvar'}
@@ -1336,7 +1440,7 @@ export const AdminPanel: React.FC = () => {
             {settingsSuccess && <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold">{settingsSuccess}</div>}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1.5"><label className="text-xs font-bold text-slate-500">Nome Oficial</label><input value={settingsDraft.name} onChange={(e) => setSettingsDraft({ ...settingsDraft, name: e.target.value })} disabled={!canManageRestaurant} className="w-full p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 font-bold text-slate-800 disabled:opacity-60" /></div>
+              <div className="space-y-1.5"><label className="text-xs font-bold text-slate-500">Nome público exibido</label><input value={settingsDraft.name} onChange={(e) => setSettingsDraft({ ...settingsDraft, name: e.target.value })} disabled={!canManageRestaurant} className="w-full p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 font-bold text-slate-800 disabled:opacity-60" /><p className="text-[10px] text-slate-450 font-semibold">O link público foi definido no cadastro. Para alterar o link, acione suporte.</p></div>
               <div className="space-y-1.5"><label className="text-xs font-bold text-slate-500">Telefone</label><input value={settingsDraft.phone ?? ''} onChange={(e) => setSettingsDraft({ ...settingsDraft, phone: e.target.value })} disabled={!canManageRestaurant} className="w-full p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 font-normal text-slate-705 disabled:opacity-60" /></div>
               <div className="space-y-1.5"><label className="text-xs font-bold text-slate-500">Endereço</label><input value={settingsDraft.address} onChange={(e) => setSettingsDraft({ ...settingsDraft, address: e.target.value })} disabled={!canManageRestaurant} className="w-full p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 font-normal text-slate-705 disabled:opacity-60" /></div>
               <div className="space-y-1.5"><label className="text-xs font-bold text-slate-500">Instagram</label><input value={settingsDraft.instagram} onChange={(e) => setSettingsDraft({ ...settingsDraft, instagram: e.target.value })} disabled={!canManageRestaurant} className="w-full p-2.5 border border-slate-200 rounded-lg text-xs outline-hidden focus:border-red-600 font-normal text-slate-705 disabled:opacity-60" /></div>
@@ -1352,7 +1456,7 @@ export const AdminPanel: React.FC = () => {
                   {settingsLoading === 'logo' ? 'Enviando logo...' : 'Enviar logo'}
                   <input type="file" accept="image/jpeg,image/png,image/webp" disabled={!canManageRestaurant || settingsLoading === 'logo'} onChange={(e) => void handleAssetUpload('logo', e.target.files?.[0] ?? null)} className="hidden" />
                 </label>
-                <p className="text-[10px] text-slate-400 font-semibold">JPG, PNG ou WEBP. Salvo como restaurant-assets/{activeRestaurantId}/logo.webp.</p>
+                <p className="text-[10px] text-slate-400 font-semibold">Recomendado: 800x800 px. JPG, PNG ou WEBP.</p>
               </div>
               <div className="space-y-3 border border-slate-200 rounded-xl p-4">
                 <div className="flex items-center gap-2 text-xs font-black uppercase text-slate-900"><ImageIcon className="w-4 h-4" />Banner</div>
@@ -1361,7 +1465,7 @@ export const AdminPanel: React.FC = () => {
                   {settingsLoading === 'banner' ? 'Enviando banner...' : 'Enviar banner'}
                   <input type="file" accept="image/jpeg,image/png,image/webp" disabled={!canManageRestaurant || settingsLoading === 'banner'} onChange={(e) => void handleAssetUpload('banner', e.target.files?.[0] ?? null)} className="hidden" />
                 </label>
-                <p className="text-[10px] text-slate-400 font-semibold">JPG, PNG ou WEBP. Salvo como restaurant-assets/{activeRestaurantId}/banner.webp.</p>
+                <p className="text-[10px] text-slate-400 font-semibold">Recomendado: 1600x600 px. JPG, PNG ou WEBP.</p>
               </div>
             </div>
 
@@ -1502,7 +1606,7 @@ export const AdminPanel: React.FC = () => {
                           </button>
                         )}
                       </div>
-                      <p className="text-[10px] leading-tight text-slate-450 font-semibold">JPG, PNG ou WEBP. A imagem será comprimida para WEBP antes do upload.</p>
+                      <p className="text-[10px] leading-tight text-slate-450 font-semibold">Recomendado: 1200x900 px. JPG, PNG ou WEBP. A imagem será comprimida antes do envio.</p>
                     </div>
                   </div>
                 </div>
@@ -1646,7 +1750,7 @@ export const AdminPanel: React.FC = () => {
                             </button>
                           )}
                         </div>
-                        <p className="text-[10px] leading-tight text-slate-450 font-semibold">JPG, PNG ou WEBP. Upload real no Supabase Storage após salvar o produto.</p>
+                        <p className="text-[10px] leading-tight text-slate-450 font-semibold">Recomendado: 1200x900 px. JPG, PNG ou WEBP. A imagem será enviada após salvar o produto.</p>
                       </div>
                     </div>
                   </div>
